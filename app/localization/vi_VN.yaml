@@ -96,7 +96,7 @@ COMMAND_ANNOUNCEMENT:
 
 ENTRY:
     GAME_TITLE: Thư Mục Game
-    CLUSTER_TITLE: Thư mục Cluster
+    CLUSTER_TITLE: Thư Mục Cluster
     TOKEN_TITLE: Server Token
     ENTRY_INVALID_INPUT: "✱ Dữ liệu đầu vô không hợp lệ"
 
@@ -157,6 +157,13 @@ ERROR:
         Không thể gởi lệnh đến shard {shard}.
 
         Tiến trình máy chủ có thể đã rơi vào trạng thái không phản hồi. Kiểm tra lỗi trong nhật ký máy chủ.
+
+SAVE_TOKEN:
+    TOOLTIP: "Tạo tệp cluser token để khởi chạy dễ dàng hơn ở lần kế tiếp."
+    CREATE_CONFIRMATION: "Tạo cluster_token.txt với Server Token hiện tại?"
+    OVERWRITE_CONFIRMATION: "cluster_token.txt đã tồn tại. Bạn có muốn ghi đè không?"
+    SUCCESS: "Thành công!"
+    SAVE_FAILED: "Không thể lưu cluster_token.txt."
 
 SETTINGS_SCREEN:
     BUTTONS:
