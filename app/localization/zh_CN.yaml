@@ -185,7 +185,15 @@ SETTINGS_SCREEN:
         TITLE: 启动参数
         DESC: 高级用户可以输入服务器启动参数。不正确使用可能导致异常行为。
 
+    MINIMIZE_TO_TRAY:
+        TITLE: 最小化到托盘
+        DESC: 启用后，点击关闭按钮会将应用程序最小化到系统托盘而不是退出。
+
     CLOSE: 返回
 
     RESTART_REQUIRED: |-
         应用这些设置需要重启应用程序。是否现在重启？
+
+TRAY:
+    SHOW_APP: 显示
+    EXIT: 退出

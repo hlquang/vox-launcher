@@ -5,7 +5,7 @@ import re
 from widgets.frames import CustomFrame
 from widgets.dropdown import CustomDropdown
 from widgets.buttons import CustomButton, ImageButton
-from constants import COLOR, SIZE, POS, OFFSET, FONT_SIZE, WINDOW_MARGIN, SETTINGS_WINDOW_MARGIN, WINDOW_HEIGHT, WINDOW_WIDTH, Pos, Size
+from constants import COLOR, SIZE, POS, OFFSET, FONT_SIZE, WINDOW_MARGIN, SETTINGS_WINDOW_MARGIN, WINDOW_HEIGHT, WINDOW_WIDTH, ENTRY_HEIGHT, Pos, Size
 from strings import STRINGS, get_default_language_code
 from fonts import FONT
 from helpers import open_github_issue, resource_path, open_folder
@@ -115,12 +115,12 @@ class SettingsScreen():
 
         self.language_dropdown._tooltip.set_position()
 
-        # -------------------------- #
+        # # -------------------------- #
 
-        # self.switch = CTkSwitch(
+        # self.tray_switch = CTkSwitch(
         #     master=self.root,
-        #     text="Switch Exemple",
-        #     #command=command,
+        #     text="",
+        #     command=self._on_tray_toggle,
         #     onvalue=True,
         #     offvalue=False,
         #     fg_color=COLOR.GRAY_HOVER,
@@ -133,10 +133,116 @@ class SettingsScreen():
         #     height=SIZE.LOGS_AUTO_SCROLL_SWITCH.h,
         # )
 
-        # self.switch.place(
-        #     x = SETTINGS_WINDOW_MARGIN,
-        #     y = SETTINGS_WINDOW_MARGIN + 300,
+        # if self.master.settings.get(Settings.MINIMIZE_TO_TRAY):
+        #     self.tray_switch.select()
+        # else:
+        #     self.tray_switch.deselect()
+
+        # # Title label left-aligned
+        # self.tray_title = CTkLabel(
+        #     master=self.root,
+        #     height=0,
+        #     text_color=COLOR.WHITE,
+        #     fg_color="transparent",
+        #     font=FONT.SETTING_TITLE,
+        #     anchor="w",
         # )
+
+        # self.tray_title._tooltip = SettingsTooltip(
+        #     master=self.root,
+        #     parent=self.tray_title,
+        #     title=STRINGS.SETTINGS_SCREEN.MINIMIZE_TO_TRAY.TITLE,
+        #     description=STRINGS.SETTINGS_SCREEN.MINIMIZE_TO_TRAY.DESC,
+        # )
+
+        # self.tray_title.place(
+        #     x = SETTINGS_WINDOW_MARGIN + 10,
+        #     y = SETTINGS_WINDOW_MARGIN + self.language_dropdown._tooltip.get_height() + ENTRY_HEIGHT + 35,
+        # )
+
+        # # Switch placed accurately to the right of the rendered text bounds
+        # self.tray_switch.place(
+        #     x = SETTINGS_WINDOW_MARGIN + 10 + self.tray_title._tooltip.get_width() + 15,
+        #     y = SETTINGS_WINDOW_MARGIN + self.language_dropdown._tooltip.get_height() + ENTRY_HEIGHT + 35,
+        # )
+
+        # # Description tooltip block
+        # self.tray_switch._tooltip = SettingsTooltip(
+        #     master=self.root,
+        #     parent=self.root,
+        #     title="",
+        #     description="",
+        # )
+
+        # # -------------------------- #
+        # -------------------------- #
+
+        # 1. Base Y position cleanly below the Language section
+        tray_y = SETTINGS_WINDOW_MARGIN + self.language_dropdown._tooltip.get_height() + ENTRY_HEIGHT + 35
+
+        # 2. Title Label (Plain text, no hidden background frames)
+        self.tray_title = CTkLabel(
+            master=self.root,
+            height=0,
+            text=STRINGS.SETTINGS_SCREEN.MINIMIZE_TO_TRAY.TITLE,
+            text_color=COLOR.WHITE,
+            fg_color="transparent",
+            font=FONT.SETTING_TITLE,
+            anchor="w",
+        )
+        self.tray_title.place(
+            x = SETTINGS_WINDOW_MARGIN + 10,
+            y = tray_y,
+        )
+
+        # Force rendering update to get the absolute text width safely
+        self.tray_title.update_idletasks()
+        title_width = self.tray_title.winfo_reqwidth() / self.root._apply_widget_scaling(1)
+
+        # 3. Toggle Switch placed inline right after the title text
+        self.tray_switch = CTkSwitch(
+            master=self.root,
+            text="",
+            command=self._on_tray_toggle,
+            onvalue=True,
+            offvalue=False,
+            fg_color=COLOR.GRAY_HOVER,
+            progress_color=COLOR.GREEN,
+            button_color=COLOR.WHITE,
+            button_hover_color=COLOR.WHITE,
+            text_color=COLOR.WHITE,
+            font=FONT.SETTING_LONG_BUTTON,
+            width=SIZE.LOGS_AUTO_SCROLL_SWITCH.w + 20,
+            height=SIZE.LOGS_AUTO_SCROLL_SWITCH.h,
+        )
+
+        if self.master.settings.get(Settings.MINIMIZE_TO_TRAY):
+            self.tray_switch.select()
+        else:
+            self.tray_switch.deselect()
+
+        self.tray_switch.place(
+            x = SETTINGS_WINDOW_MARGIN + 10 + title_width + 15,
+            y = tray_y - 9,
+        )
+
+        # 4. Standalone Description Text Block placed safely underneath
+        tooltip_width = WINDOW_WIDTH / 2.5
+        self.tray_desc = CTkLabel(
+            master=self.root,
+            height=0,
+            text=STRINGS.SETTINGS_SCREEN.MINIMIZE_TO_TRAY.DESC,
+            text_color=COLOR.WHITE_HOVER,
+            fg_color="transparent",
+            font=FONT.SETTING_DESC,
+            wraplength=tooltip_width - 20,
+            justify="left",
+            anchor="nw"
+        )
+        self.tray_desc.place(
+            x = SETTINGS_WINDOW_MARGIN + 10,
+            y = tray_y + 24, # Explicit font-line height gap to match the grid look perfectly
+        )
 
         # -------------------------- #
 
@@ -298,3 +404,8 @@ class SettingsScreen():
             tag = matched_word in INVALID_TEXTBOX_ARGS and "badoption" or "goodoption"
 
             self.arguments_entry.tag_add(tag, f"1.0+{start}c", f"1.0+{end}c")
+
+    def _on_tray_toggle(self):
+        enabled = self.tray_switch.get()
+        self.master.settings.set(Settings.MINIMIZE_TO_TRAY, enabled)
+        self.master._update_tray()

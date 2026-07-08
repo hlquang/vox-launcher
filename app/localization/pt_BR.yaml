@@ -184,7 +184,15 @@ SETTINGS_SCREEN:
         TITLE: Opções de Inicialização
         DESC: Usuários avançados podem inserir opções de inicialização do servidor. O uso inadequado pode levar a comportamentos inesperados.
 
+    MINIMIZE_TO_TRAY:
+        TITLE: Minimizar para a bandeja
+        DESC: Quando habilitado, o botão de fechar minimiza o app para a bandeja do sistema em vez de sair.
+
     CLOSE: Voltar
 
     RESTART_REQUIRED: |-
             Aplicar essas configurações requer reiniciar o aplicativo. Você gostaria de reiniciar agora?
+
+TRAY:
+    SHOW_APP: Mostrar
+    EXIT: Sair

@@ -43,7 +43,10 @@ else:
 NEW_LINE = "\n"
 
 def print_header(title, color):
-    TERMINAL_X = os.get_terminal_size().columns
+    try:
+        TERMINAL_X = os.get_terminal_size().columns
+    except OSError:
+        TERMINAL_X = 80
     PRETTY_LINE = "-" * TERMINAL_X
     RESET_LINE = PRETTY_LINE + NEW_LINE + RESET
 
@@ -74,7 +77,6 @@ FILE = "app/main.py"
 
 EXE_NAME   = "Vox Launcher"
 BUILD_NAME = APP_VERSION
-ZIP_NAME   = "VoxLauncher.zip"
 
 ICON = "../app/assets/icon.ico"
 
@@ -155,8 +157,6 @@ if __name__ == "__main__":
 
     # Define paths
     build_path = Path(BUILD_DIRECTORY) / EXE_NAME
-    zip_temp_path = Path(WORK_DIRECTORY) / "temp.zip"
-    zip_path = build_path / ZIP_NAME
     versioned_build_path = Path(BUILD_DIRECTORY) / BUILD_NAME
 
     print() # For spacing.
@@ -173,16 +173,6 @@ if __name__ == "__main__":
 
     # Rename build folder
     rename_build_folder(build_path, versioned_build_path)
-
-    # Zip the build folder
-    print(f"{YELLOW}[INFO]{RESET} Zipping build folder as: {YELLOW}{ZIP_NAME}{RESET}")
-    shutil.make_archive(str(zip_temp_path.with_suffix('')), 'zip', versioned_build_path)
-
-    # Move zip to build folder
-    final_zip_path = versioned_build_path / ZIP_NAME
-    zip_temp_path.rename(final_zip_path)
-
-    print(f"{GREEN}[SUCCESS]{RESET} Build zipped at: {GREEN}{final_zip_path.as_posix()}{RESET}")
 
     # Open folder in Explorer
     os.startfile(versioned_build_path)

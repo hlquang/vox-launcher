@@ -179,7 +179,15 @@ SETTINGS_SCREEN:
         TITLE: Tùy Chọn Khởi Chạy
         DESC: Người sử dụng nâng cao có thể nhập các tùy chọn khởi chạy máy chủ. Sử dụng không đúng cách có thể dẫn tới lỗi ngoài dự kiến.
 
+    MINIMIZE_TO_TRAY:
+        TITLE: Thu nhỏ vào khay hệ thống
+        DESC: Khi bật, nút đóng sẽ thu nhỏ ứng dụng vào khay hệ thống thay vì thoát.
+
     CLOSE: Quay lại
 
     RESTART_REQUIRED: |-
         Áp dụng các cài đặt này yêu cầu phải khởi động lại ứng dụng. Bạn có muốn khởi động lại ngay bây giờ không?
+
+TRAY:
+    SHOW_APP: Hiện
+    EXIT: Thoát

@@ -191,7 +191,15 @@ SETTINGS_SCREEN:
         TITLE: Launch Options
         DESC: Advanced users may enter server launch options. Improper use may lead to unexpected behavior.
 
+    MINIMIZE_TO_TRAY:
+        TITLE: Minimize to Tray
+        DESC: When enabled, clicking the close button minimizes the app to the system tray instead of exiting.
+
     CLOSE: Back
 
     RESTART_REQUIRED: |-
         Applying these settings requires restarting the application. Would you like to restart now?
+
+TRAY:
+    SHOW_APP: Show
+    EXIT: Exit

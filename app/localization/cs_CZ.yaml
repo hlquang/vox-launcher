@@ -185,7 +185,15 @@ SETTINGS_SCREEN:
         TITLE: Možnosti spuštění
         DESC: Pokročilí uživatelé mohou zadat možnosti spuštění serveru. Nesprávné použití může vést k neočekávanému chování.
 
+    MINIMIZE_TO_TRAY:
+        TITLE: Minimalizovat do lišty
+        DESC: Pokud je povoleno, tlačítko zavřít minimalizuje aplikaci do systémové lišty místo ukončení.
+
     CLOSE: Zpět
 
     RESTART_REQUIRED: |-
             Aplikace těchto nastavení vyžaduje restartování aplikace. Chcete nyní restartovat?
+
+TRAY:
+    SHOW_APP: Zobrazit
+    EXIT: Ukončit

@@ -19,6 +19,7 @@ from widgets.entries import TokenEntry, DirectoryEntry, ClusterDirectoryEntry
 from widgets.frames import ScrollableShardGroupFrame
 from widgets.misc import Tooltip, CommandPopUp, ServerErrorPopUp, AppExceptionPopUp, AppOutdatedPopUp, LaunchDataPopUp, ClusterStats, RestartRequiredPopUp
 from widgets.settings_screen import SettingsScreen
+from tray import SystemTray
 
 # ------------------------------------------------------------------------------------ #
 
@@ -114,6 +115,27 @@ class App(CTk):
 
         self.entries_save_loader = SaveLoader(filename="entries.json")
         self.launch_data_save_loader = SaveLoader(filename="launchdata.json")
+
+        self.system_tray = SystemTray(self)
+        self.protocol("WM_DELETE_WINDOW", self._on_close)
+
+    def _on_close(self, force_exit=False):
+        minimize = self.settings.get(Settings.MINIMIZE_TO_TRAY)
+
+        if not force_exit and minimize:
+            self.withdraw()
+            self.system_tray.show()
+        else:
+            self.system_tray.hide()
+            self.stop_shards()
+            self.destroy()
+            sys.exit(0)
+
+    def _update_tray(self):
+        if self.settings.get(Settings.MINIMIZE_TO_TRAY):
+            pass
+        else:
+            self.system_tray.hide()
 
     def create_widgets(self):
         """
