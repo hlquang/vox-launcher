@@ -183,6 +183,10 @@ SETTINGS_SCREEN:
         TITLE: Thu nhỏ vào khay hệ thống
         DESC: Khi bật, nút đóng sẽ thu nhỏ ứng dụng vào khay hệ thống thay vì thoát.
 
+    AUTO_LAUNCH:
+        TITLE: Tự động khởi chạy
+        DESC: Khi bật, máy chủ sẽ tự động khởi chạy khi mở ứng dụng nếu tất cả thông tin bắt buộc đã được điền.
+
     CLOSE: Quay lại
 
     RESTART_REQUIRED: |-

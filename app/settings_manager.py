@@ -12,11 +12,13 @@ class Settings:
     LANGUAGE = "LANGUAGE"
     LAUNCH_OPTIONS = "LAUNCH_OPTIONS"
     MINIMIZE_TO_TRAY = "MINIMIZE_TO_TRAY"
+    AUTO_LAUNCH = "AUTO_LAUNCH"
 
     DEFAULTS = {
         LANGUAGE: get_default_language_code(),
         LAUNCH_OPTIONS: "",
         MINIMIZE_TO_TRAY: False,
+        AUTO_LAUNCH: False,
     }
 
 class SettingsManager:

@@ -188,6 +188,10 @@ SETTINGS_SCREEN:
         TITLE: Minimizar para a bandeja
         DESC: Quando habilitado, o botão de fechar minimiza o app para a bandeja do sistema em vez de sair.
 
+    AUTO_LAUNCH:
+        TITLE: Início automático
+        DESC: Quando habilitado, o servidor é iniciado automaticamente ao abrir o app se todas as informações necessárias estiverem preenchidas.
+
     CLOSE: Voltar
 
     RESTART_REQUIRED: |-

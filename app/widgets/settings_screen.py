@@ -246,6 +246,70 @@ class SettingsScreen():
 
         # -------------------------- #
 
+        # Auto Launch toggle
+        auto_launch_y = tray_y + 70
+
+        self.auto_launch_title = CTkLabel(
+            master=self.root,
+            height=0,
+            text=STRINGS.SETTINGS_SCREEN.AUTO_LAUNCH.TITLE,
+            text_color=COLOR.WHITE,
+            fg_color="transparent",
+            font=FONT.SETTING_TITLE,
+            anchor="w",
+        )
+        self.auto_launch_title.place(
+            x = SETTINGS_WINDOW_MARGIN + 10,
+            y = auto_launch_y,
+        )
+
+        self.auto_launch_title.update_idletasks()
+        auto_launch_title_width = self.auto_launch_title.winfo_reqwidth() / self.root._apply_widget_scaling(1)
+
+        self.auto_launch_switch = CTkSwitch(
+            master=self.root,
+            text="",
+            command=self._on_auto_launch_toggle,
+            onvalue=True,
+            offvalue=False,
+            fg_color=COLOR.GRAY_HOVER,
+            progress_color=COLOR.GREEN,
+            button_color=COLOR.WHITE,
+            button_hover_color=COLOR.WHITE,
+            text_color=COLOR.WHITE,
+            font=FONT.SETTING_LONG_BUTTON,
+            width=SIZE.LOGS_AUTO_SCROLL_SWITCH.w + 20,
+            height=SIZE.LOGS_AUTO_SCROLL_SWITCH.h,
+        )
+
+        if self.master.settings.get(Settings.AUTO_LAUNCH):
+            self.auto_launch_switch.select()
+        else:
+            self.auto_launch_switch.deselect()
+
+        self.auto_launch_switch.place(
+            x = SETTINGS_WINDOW_MARGIN + 10 + auto_launch_title_width + 15,
+            y = auto_launch_y - 9,
+        )
+
+        self.auto_launch_desc = CTkLabel(
+            master=self.root,
+            height=0,
+            text=STRINGS.SETTINGS_SCREEN.AUTO_LAUNCH.DESC,
+            text_color=COLOR.WHITE_HOVER,
+            fg_color="transparent",
+            font=FONT.SETTING_DESC,
+            wraplength=tooltip_width - 20,
+            justify="left",
+            anchor="nw"
+        )
+        self.auto_launch_desc.place(
+            x = SETTINGS_WINDOW_MARGIN + 10,
+            y = auto_launch_y + 24,
+        )
+
+        # -------------------------- #
+
         self.arguments_entry = CTkTextbox(
             master = self.root,
             corner_radius=15,
@@ -409,3 +473,7 @@ class SettingsScreen():
         enabled = self.tray_switch.get()
         self.master.settings.set(Settings.MINIMIZE_TO_TRAY, enabled)
         self.master._update_tray()
+
+    def _on_auto_launch_toggle(self):
+        enabled = self.auto_launch_switch.get()
+        self.master.settings.set(Settings.AUTO_LAUNCH, enabled)

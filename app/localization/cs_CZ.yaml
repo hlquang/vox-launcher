@@ -189,6 +189,10 @@ SETTINGS_SCREEN:
         TITLE: Minimalizovat do lišty
         DESC: Pokud je povoleno, tlačítko zavřít minimalizuje aplikaci do systémové lišty místo ukončení.
 
+    AUTO_LAUNCH:
+        TITLE: Automatické spuštění
+        DESC: Pokud je povoleno, server se automaticky spustí při otevření aplikace, pokud jsou vyplněny všechny požadované údaje.
+
     CLOSE: Zpět
 
     RESTART_REQUIRED: |-

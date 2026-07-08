@@ -189,6 +189,10 @@ SETTINGS_SCREEN:
         TITLE: 最小化到托盘
         DESC: 启用后，点击关闭按钮会将应用程序最小化到系统托盘而不是退出。
 
+    AUTO_LAUNCH:
+        TITLE: 自动启动
+        DESC: 启用后，如果所有必填信息已填写，服务器将在应用启动时自动启动。
+
     CLOSE: 返回
 
     RESTART_REQUIRED: |-

@@ -547,6 +547,9 @@ if __name__ == "__main__":
 
     app.create_widgets()
 
+    if app.settings.get(Settings.AUTO_LAUNCH) and hasattr(app, "master_shard"):
+        app.after(500, app.callback_launch)
+
     if DEBUG_MODE:
         app.bind("<Control-r>", app.restart_application)
 

@@ -195,6 +195,10 @@ SETTINGS_SCREEN:
         TITLE: Minimize to Tray
         DESC: When enabled, clicking the close button minimizes the app to the system tray instead of exiting.
 
+    AUTO_LAUNCH:
+        TITLE: Auto Launch
+        DESC: When enabled, the server launches automatically on app startup if all required info is filled.
+
     CLOSE: Back
 
     RESTART_REQUIRED: |-
