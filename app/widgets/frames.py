@@ -7,7 +7,7 @@ from PIL import Image
 from strings import STRINGS, get_readable_system_language
 from constants import APP_VERSION, COLOR, SERVER_STATUS, OFFSET, SIZE, FRAME_GAP, FONT_SIZE, LOGGER, Pos, Size
 from widgets.buttons import RelativeXImageButton, CustomButton
-from helpers import load_lua_file, disable_bind, resource_path, get_memory_usage, open_folder, TextHighlightData, PeriodicTask, read_file_nonblocking
+from helpers import load_lua_file, disable_bind, resource_path, get_memory_usage, open_path, TextHighlightData, PeriodicTask, read_file_nonblocking
 from shard_server import DedicatedServerShard
 from fonts import FONT
 
@@ -112,7 +112,7 @@ class LogsTopBar:
         return True, None
 
     def _open_shard_folder(self):
-        open_folder(Path(self.server.app.cluster_entry.get()) / self.shard)
+        open_path(Path(self.server.app.cluster_entry.get()) / self.shard)
 
     def start_tracking_memory(self):
         self.update_memory()
@@ -635,104 +635,64 @@ class ShardFrame(CustomFrame):
 
         self.set_offline()
 
+    def _update_status(self, status, status_text, color):
+        """Common status update logic."""
+        self.status.set(status)
+        self.status_msg.set(status_text)
+        self.status_circle.set_color(color)
+
+    def _hide_action_buttons(self):
+        """Hide all action buttons."""
+        self._master.save_button.hide()
+        self._master.quit_button.hide()
+        self._master.reset_button.hide()
+        self._master.rollback_button.hide()
+
+    def _show_action_buttons(self):
+        """Show all action buttons."""
+        self._master.save_button.show()
+        self._master.quit_button.show()
+        self._master.reset_button.show()
+        self._master.rollback_button.show()
+
     def set_offline(self):
-        self.status.set(SERVER_STATUS.OFFLINE)
-
-        self.status_msg.set(STRINGS.SHARD_STATUS.OFFLINE)
-        self.status_circle.set_color(COLOR.WHITE)
-
+        self._update_status(SERVER_STATUS.OFFLINE, STRINGS.SHARD_STATUS.OFFLINE, COLOR.WHITE)
         if self.is_master:
-            self._master.launch_button.set_style(
-                text=STRINGS.LAUNCH_BUTTON.LAUNCH,
-                fg_color=COLOR.GRAY,
-                hover_color=COLOR.GRAY_HOVER,
-            )
-
+            self._master.launch_button.set_style(text=STRINGS.LAUNCH_BUTTON.LAUNCH, fg_color=COLOR.GRAY, hover_color=COLOR.GRAY_HOVER)
             self._master.launch_button.enable()
-
-            self._master.save_button.hide()
-            self._master.quit_button.hide()
-            self._master.reset_button.hide()
-            self._master.rollback_button.hide()
-
+            self._hide_action_buttons()
             self._master.cluster_stats.hide()
-
             self._master.game_entry.enable()
             self._master.cluster_entry.enable()
             self._master.token_entry.enable()
 
     def set_restarting(self):
-        self.status.set(SERVER_STATUS.RESTARTING)
-
-        self.status_msg.set(STRINGS.SHARD_STATUS.RESTARTING)
-        self.status_circle.set_color(COLOR.YELLOW)
-
+        self._update_status(SERVER_STATUS.RESTARTING, STRINGS.SHARD_STATUS.RESTARTING, COLOR.YELLOW)
         if self.is_master:
-            self._master.launch_button.set_style(
-                text=STRINGS.LAUNCH_BUTTON.CANCEL,
-                fg_color=COLOR.RED,
-                hover_color=COLOR.RED_HOVER,
-            )
-
-            self._master.save_button.hide()
-            self._master.quit_button.hide()
-            self._master.reset_button.hide()
-            self._master.rollback_button.hide()
-
+            self._master.launch_button.set_style(text=STRINGS.LAUNCH_BUTTON.CANCEL, fg_color=COLOR.RED, hover_color=COLOR.RED_HOVER)
+            self._hide_action_buttons()
 
     def set_starting(self):
-        self.status.set(SERVER_STATUS.STARTING)
-
-        self.status_msg.set(STRINGS.SHARD_STATUS.STARTING)
-        self.status_circle.set_color(COLOR.YELLOW)
-
+        self._update_status(SERVER_STATUS.STARTING, STRINGS.SHARD_STATUS.STARTING, COLOR.YELLOW)
         if self.is_master:
-            self._master.launch_button.set_style(
-                text=STRINGS.LAUNCH_BUTTON.CANCEL,
-                fg_color=COLOR.RED,
-                hover_color=COLOR.RED_HOVER,
-            )
-
+            self._master.launch_button.set_style(text=STRINGS.LAUNCH_BUTTON.CANCEL, fg_color=COLOR.RED, hover_color=COLOR.RED_HOVER)
             self._master.game_entry.disable()
             self._master.cluster_entry.disable()
             self._master.token_entry.disable()
 
     def set_stopping(self):
-        self.status.set(SERVER_STATUS.STOPPING)
-
-        self.status_msg.set(STRINGS.SHARD_STATUS.STOPPING)
-        self.status_circle.set_color(COLOR.YELLOW)
-
+        self._update_status(SERVER_STATUS.STOPPING, STRINGS.SHARD_STATUS.STOPPING, COLOR.YELLOW)
         if self.is_master:
-            self._master.launch_button.set_style(
-                text=STRINGS.LAUNCH_BUTTON.STOPPING,
-                fg_color=COLOR.GRAY,
-                hover_color=COLOR.GRAY_HOVER,
-            )
-
+            self._master.launch_button.set_style(text=STRINGS.LAUNCH_BUTTON.STOPPING, fg_color=COLOR.GRAY, hover_color=COLOR.GRAY_HOVER)
             self._master.launch_button.disable()
-
-            self._master.save_button.hide()
-            self._master.quit_button.hide()
-            self._master.reset_button.hide()
-            self._master.rollback_button.hide()
-
+            self._hide_action_buttons()
             self._master.cluster_stats.hide()
 
     def set_online(self):
-        self.status.set(SERVER_STATUS.ONLINE)
-
-        self.status_msg.set(STRINGS.SHARD_STATUS.ONLINE)
-        self.status_circle.set_color(COLOR.GREEN)
-
+        self._update_status(SERVER_STATUS.ONLINE, STRINGS.SHARD_STATUS.ONLINE, COLOR.GREEN)
         if self.is_master:
             self._master.launch_button.set_style(text=STRINGS.LAUNCH_BUTTON.SAVE_QUIT)
-
-            self._master.save_button.show()
-            self._master.quit_button.show()
-            self._master.reset_button.show()
-            self._master.rollback_button.show()
-
+            self._show_action_buttons()
             self._master.master_shard.execute_command(load_lua_file("worlddata", version=APP_VERSION, lang_code=get_readable_system_language()), log=False)
 
     def is_starting(self):

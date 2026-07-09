@@ -353,23 +353,28 @@ class App(CTk):
         threading.Thread(target=_check, daemon=True).start()
 
 
-    def callback_launch(self):
-        if not hasattr(self, "master_shard"):
-            return
-
+    def _validate_token(self):
+        """Returns the token string if valid, None otherwise."""
         token = self.token_entry.get()
 
         if not token.strip():
             self.token_entry.toggle_warning(False)
             self.error_popup.create(STRINGS.ERROR.TOKEN_EMPTY)
-
-            return # No token provided.
+            return None
 
         if not is_valid_token(token):
             self.token_entry.toggle_warning(False)
             self.error_popup.create(STRINGS.ERROR.TOKEN_INVALID)
+            return None
 
-            return # Invalid token, don't start server.
+        return token
+
+    def callback_launch(self):
+        if not hasattr(self, "master_shard"):
+            return
+
+        if self._validate_token() is None:
+            return
 
         if self.master_shard.is_running():
             self.master_shard.stop()
@@ -388,16 +393,7 @@ class App(CTk):
             self.error_popup.create(STRINGS.ERROR.DIRECTORY_INVALID.format(directory_name=STRINGS.ENTRY.CLUSTER_TITLE))
             return
 
-        token = self.token_entry.get()
-
-        if not token.strip():
-            self.token_entry.toggle_warning(False)
-            self.error_popup.create(STRINGS.ERROR.TOKEN_EMPTY)
-            return
-
-        if not is_valid_token(token):
-            self.token_entry.toggle_warning(False)
-            self.error_popup.create(STRINGS.ERROR.TOKEN_INVALID)
+        if self._validate_token() is None:
             return
 
         token_file = directory_path / "cluster_token.txt"
@@ -461,20 +457,15 @@ class App(CTk):
     def execute_special_command(self, command, announcement=None, slider_fn=None, confirmation_text=None):
         if confirmation_text:
             confirmed, slider_value = self.confirmation_popup.create(confirmation_text, slider_fn=slider_fn)
+            if not confirmed:
+                return
+            if slider_value:
+                command = command.format(value=slider_value)
 
-            if confirmed:
-                command_fmt = slider_value and command.format(value=slider_value) or command
+        if announcement:
+            self.master_shard.execute_command(ANNOUNCE_STR.format(msg=announcement), log=False)
 
-                if announcement:
-                    self.master_shard.execute_command(ANNOUNCE_STR.format(msg=announcement), log=False)
-
-                self.master_shard.execute_command(command_fmt)
-
-        else:
-            if announcement:
-                self.master_shard.execute_command(ANNOUNCE_STR.format(msg=announcement), log=False)
-
-            self.master_shard.execute_command(command)
+        self.master_shard.execute_command(command)
 
 
     def save_entries_data(self):

@@ -8,7 +8,7 @@ import requests, os
 from strings import STRINGS
 from constants import COLOR, SIZE, POS
 from widgets.frames import CustomFrame
-from helpers import resource_path, open_file, open_github_issue, add_folder_to_zip
+from helpers import resource_path, open_path, open_github_issue, add_folder_to_zip
 from fonts import FONT
 
 class ClusterStats:
@@ -343,7 +343,7 @@ class ServerErrorPopUp(PopUp):
         path = Path(self.root.cluster_entry.get()) / "Master/server_log.txt"
 
         if path.exists():
-            open_file(path)
+            open_path(path)
 
 class AppExceptionPopUp(PopUp):
     def __init__(self, root):

@@ -389,17 +389,8 @@ def open_github_issue(template="bug_report", traceback=None, include_applog=Fals
 
     webbrowser.open(url, new=0, autoraise=True)
 
-def open_folder(path):
-    """ Opens a Windows explorer instance on this path  """
-    if isinstance(path, str):
-        path = Path(path)
-
-    if path.exists():
-        os.startfile(path)
-
-def open_file(path):
-    """ Opens a file  """
-
+def open_path(path):
+    """Opens a file or directory in Windows Explorer."""
     if isinstance(path, str):
         path = Path(path)
 

@@ -8,7 +8,7 @@ from widgets.buttons import CustomButton, ImageButton
 from constants import COLOR, SIZE, POS, OFFSET, FONT_SIZE, WINDOW_MARGIN, SETTINGS_WINDOW_MARGIN, WINDOW_HEIGHT, WINDOW_WIDTH, ENTRY_HEIGHT, Pos, Size
 from strings import STRINGS, get_default_language_code
 from fonts import FONT
-from helpers import open_github_issue, resource_path, open_folder
+from helpers import open_github_issue, resource_path, open_path
 from settings_manager import Settings
 
 INVALID_TEXTBOX_ARGS = [ "cluster", "shard", "monitor_parent_process", "token", "ownerdir", "persistent_storage_root", "ugc_directory" ]
@@ -356,8 +356,8 @@ class SettingsScreen():
         )
 
         buttons = [
-            ("APP_LOG",      "assets/file.png",      lambda: open_folder(resource_path("logs"))    ),
-            ("LOCAL_FILES",  "assets/directory.png", lambda: open_folder(resource_path("savedata"))),
+            ("APP_LOG",      "assets/file.png",      lambda: open_path(resource_path("logs"))    ),
+            ("LOCAL_FILES",  "assets/directory.png", lambda: open_path(resource_path("savedata"))),
             ("REPORT_ISSUE", "assets/bug.png",       lambda: open_github_issue(include_applog=True)),
         ]
 
