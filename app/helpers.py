@@ -3,7 +3,7 @@ import winreg, ctypes
 from dataclasses import dataclass
 import ctypes.wintypes
 import webbrowser
-import re, json, sys
+import re, json, sys, math
 import logging
 import threading
 import psutil, os, zipfile
@@ -334,7 +334,7 @@ def validate_cluster_directory(directory: str) -> bool:
 
 # ----------------------------------------------------------------------------------------- #
 
-TOKEN_PATTERN = r"^pds-g\^KU.+?\^.+?=$"
+TOKEN_PATTERN = r"^pds-g\^KU.+?\^.+?"
 
 def is_valid_token(token: str) -> bool:
     """
@@ -352,6 +352,70 @@ def is_valid_token(token: str) -> bool:
 
 # ----------------------------------------------------------------------------------------- #
 
+class INVALID:
+    """ Reason keys for entry validation, resolved against STRINGS.ENTRY.INVALID. """
+
+    EMPTY = "EMPTY"
+    MISSING = "MISSING"
+    NO_EXECUTABLE = "NO_EXECUTABLE"
+    NO_CLUSTER_INI = "NO_CLUSTER_INI"
+    NO_MASTER = "NO_MASTER"
+    CLOUD_SAVES = "CLOUD_SAVES"
+    WRONG_LOCATION = "WRONG_LOCATION"
+    TOKEN_FORMAT = "TOKEN_FORMAT"
+
+def get_game_directory_error(directory: str):
+    """ Returns an INVALID reason for the game directory, or None when it's usable. """
+
+    if not directory.strip():
+        return INVALID.EMPTY
+
+    if not Path(directory).exists():
+        return INVALID.MISSING
+
+    if not validate_game_directory(directory):
+        return INVALID.NO_EXECUTABLE
+
+    return None
+
+def get_cluster_directory_error(directory: str):
+    """ Returns an INVALID reason for the cluster directory, or None when it's usable. """
+
+    if not directory.strip():
+        return INVALID.EMPTY
+
+    path = Path(directory)
+
+    if any(part.lower() == "cloudsaves" for part in path.parts):
+        return INVALID.CLOUD_SAVES
+
+    if not path.exists():
+        return INVALID.MISSING
+
+    if not (path / "cluster.ini").exists():
+        return INVALID.NO_CLUSTER_INI
+
+    if not (path / "Master").exists():
+        return INVALID.NO_MASTER
+
+    if not path.parent.name.isdigit():
+        return INVALID.WRONG_LOCATION
+
+    return None
+
+def get_token_error(token: str):
+    """ Returns an INVALID reason for the server token, or None when it's usable. """
+
+    if not token.strip():
+        return INVALID.EMPTY
+
+    if not is_valid_token(token):
+        return INVALID.TOKEN_FORMAT
+
+    return None
+
+# ----------------------------------------------------------------------------------------- #
+
 def get_app_logs():
     file = resource_path("logs/applog.txt")
 
@@ -366,6 +430,11 @@ def open_klei_account_page(*args, **kwargs):
     """ Opens Klei dedicated servers website in the default browser. """
 
     webbrowser.open("https://accounts.klei.com/account/game/servers?game=DontStarveTogether", new=0, autoraise=True)
+
+def open_url(url):
+    """ Opens an url in the default browser. """
+
+    webbrowser.open(url, new=0, autoraise=True)
 
 def open_github_issue(template="bug_report", traceback=None, include_applog=False):
     """
@@ -508,7 +577,7 @@ def get_shard_names(cluster):
 
     for directory in cluster.iterdir():
         if directory.is_dir() and (directory / "server.ini").exists():
-            shards.append(directory.stem)
+            shards.append(directory.name)
 
     return sorted(shards, key=sort_key)
 
@@ -710,6 +779,41 @@ def set_debug_scale(scale):
     set_window_scaling(scale)
     set_widget_scaling(scale)
 
+def redraw_safe_size(widget, value, grow_only=False):
+    """
+    Nearest whole size to value that CTk can draw rounded corners on cleanly.
+
+    CTk rescales a widget's pixel size back to logical units on every <Configure> and redraws
+    from that, truncating in both directions. Sizes that lose a pixel there, or that land on an
+    odd pixel count, get their corner arcs drawn half a pixel off from the straight edges, which
+    reads as a dent.
+
+    Args:
+        widget (CTkBaseClass): the widget the size will be applied to.
+        value (int, float): the wanted size, in logical pixels.
+        grow_only (bool): never return less than value, for sizes that would clip their content.
+
+    Returns:
+        size (int): the closest usable size, preferring the smaller one on a tie.
+    """
+
+    value = math.ceil(value) if grow_only else int(value)
+
+    if value <= 0:
+        return value
+
+    def usable(candidate):
+        scaled = widget._apply_widget_scaling(candidate)
+
+        return scaled % 2 == 0 and widget._reverse_widget_scaling(scaled) == candidate
+
+    for offset in range(64):
+        for candidate in (value + offset,) if grow_only else (value - offset, value + offset):
+            if candidate > 0 and usable(candidate):
+                return candidate
+
+    return value
+
 def read_file_nonblocking(file: Path, callback):
     def worker():
         if file.exists():
@@ -741,7 +845,7 @@ for start, end in _INVALID_UNICODE_RANGES:
 _CUSTOM_UNICODE_PATTERN = re.compile(f"[{regex_range}]")
 
 def get_sanitized_cluster_name(config_file):
-    cluster_name = get_key_from_ini_file(config_file, "cluster_name")
+    cluster_name = get_key_from_ini_file(config_file, "cluster_name") or ""
 
     # Remove custom unicode characters.
     cleaned = _CUSTOM_UNICODE_PATTERN.sub("", cluster_name)

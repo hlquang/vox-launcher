@@ -1,10 +1,12 @@
-from customtkinter import CTkLabel, CTkTextbox, CTkFrame, CTkSwitch
+from customtkinter import CTkLabel, CTkTextbox, CTkFrame, CTkSwitch, CTkImage
+from PIL import Image
 from tkinter import END
 import re
 
 from widgets.frames import CustomFrame
 from widgets.dropdown import CustomDropdown
 from widgets.buttons import CustomButton, ImageButton
+from widgets.misc import Tooltip
 from constants import COLOR, SIZE, POS, OFFSET, FONT_SIZE, WINDOW_MARGIN, SETTINGS_WINDOW_MARGIN, WINDOW_HEIGHT, WINDOW_WIDTH, ENTRY_HEIGHT, Pos, Size
 from strings import STRINGS, get_default_language_code
 from fonts import FONT
@@ -13,12 +15,22 @@ from settings_manager import Settings
 
 INVALID_TEXTBOX_ARGS = [ "cluster", "shard", "monitor_parent_process", "token", "ownerdir", "persistent_storage_root", "ugc_directory" ]
 
+LAUNCH_OPTIONS_GUIDE_URL = "https://support.klei.com/hc/en-us/articles/360029556192-Dedicated-Server-Command-Line-Options-Guide"
+
+ARGUMENTS_ENTRY = Size(350, 90)
+BUTTON_MENU_GAP = 30
+TOOLTIP_TEXT_PADDING = 10
+TOOLTIP_TITLE_GAP = 4
+TOOLTIP_WIDGET_GAP = 6
+TOOLTIP_ICON_GAP = 6
+TOOLTIP_ICON = Size(16, 16)
+
 class SettingsTooltip(CTkFrame):
-    def __init__(self, master, parent, title, description):
+    def __init__(self, master, parent, title, description, icon_tooltip=None, icon_url=None):
         self._master = master
         self.parent = parent
 
-        max_width = self.parent.winfo_reqwidth() / self.parent._apply_widget_scaling(1) - 30
+        max_width = self.parent.winfo_reqwidth() / self.parent._apply_widget_scaling(1.0) - 30
 
         super().__init__(
             master=master,
@@ -29,8 +41,16 @@ class SettingsTooltip(CTkFrame):
             height=0,
         )
 
-        self.title = CTkLabel(
+        self.header = CTkFrame(
             master=self,
+            fg_color="transparent",
+            width=0,
+            height=0,
+        )
+
+        self.title = CTkLabel(
+            master=self.header,
+            width=0,
             height=0,
             text=title,
             text_color=COLOR.WHITE,
@@ -42,6 +62,7 @@ class SettingsTooltip(CTkFrame):
 
         self.description = CTkLabel(
             master=self,
+            width=0,
             height=0,
             text=description,
             text_color=COLOR.WHITE_HOVER,
@@ -51,32 +72,56 @@ class SettingsTooltip(CTkFrame):
             justify="left"
         )
 
-        self.title.grid(
+        self.title.pack(side="left")
+
+        self.icon = None
+
+        if icon_url:
+            self.icon = CTkLabel(
+                master=self.header,
+                width=0,
+                height=0,
+                text="",
+                fg_color="transparent",
+                cursor="hand2",
+                image=CTkImage(Image.open(resource_path("assets/info.png")), size=(TOOLTIP_ICON.w, TOOLTIP_ICON.h)),
+            )
+
+            self.icon.pack(side="left", padx=(TOOLTIP_ICON_GAP, 0))
+
+            self.icon_tooltip = Tooltip(
+                widget=self.icon,
+                text=icon_tooltip,
+                onclick=lambda event: open_url(icon_url),
+                above=True,
+            )
+
+        self.header.grid(
             row = 0,
             column = 0,
-            padx = 10,
+            padx = TOOLTIP_TEXT_PADDING,
             sticky="nw",
         )
 
         self.description.grid(
             row = 1,
             column = 0,
-            padx = 10,
-            pady = (5, 0),
+            padx = TOOLTIP_TEXT_PADDING,
+            pady = (TOOLTIP_TITLE_GAP, 0),
             sticky="nw",
         )
 
     def get_height(self):
         self.update_idletasks()
 
-        return self.winfo_reqheight() / self.parent._apply_widget_scaling(1) + 12
+        return self.winfo_reqheight() / self.parent._apply_widget_scaling(1.0) + TOOLTIP_WIDGET_GAP
 
     def set_position(self):
         self.parent.update_idletasks()
 
         self.place(
-            x=self.parent.winfo_x() / self.parent._apply_widget_scaling(1),
-            y=(self.parent.winfo_y() - self.winfo_reqheight()) / self.parent._apply_widget_scaling(1) - 12,
+            x=self.parent.winfo_x() / self.parent._apply_widget_scaling(1.0),
+            y=(self.parent.winfo_y() - self.winfo_reqheight()) / self.parent._apply_widget_scaling(1.0) - 12,
         )
 
 class SettingsScreen():
@@ -114,65 +159,6 @@ class SettingsScreen():
         )
 
         self.language_dropdown._tooltip.set_position()
-
-        # # -------------------------- #
-
-        # self.tray_switch = CTkSwitch(
-        #     master=self.root,
-        #     text="",
-        #     command=self._on_tray_toggle,
-        #     onvalue=True,
-        #     offvalue=False,
-        #     fg_color=COLOR.GRAY_HOVER,
-        #     progress_color=COLOR.GREEN,
-        #     button_color=COLOR.WHITE,
-        #     button_hover_color=COLOR.WHITE,
-        #     text_color=COLOR.WHITE,
-        #     font=FONT.SETTING_LONG_BUTTON,
-        #     width=SIZE.LOGS_AUTO_SCROLL_SWITCH.w + 20,
-        #     height=SIZE.LOGS_AUTO_SCROLL_SWITCH.h,
-        # )
-
-        # if self.master.settings.get(Settings.MINIMIZE_TO_TRAY):
-        #     self.tray_switch.select()
-        # else:
-        #     self.tray_switch.deselect()
-
-        # # Title label left-aligned
-        # self.tray_title = CTkLabel(
-        #     master=self.root,
-        #     height=0,
-        #     text_color=COLOR.WHITE,
-        #     fg_color="transparent",
-        #     font=FONT.SETTING_TITLE,
-        #     anchor="w",
-        # )
-
-        # self.tray_title._tooltip = SettingsTooltip(
-        #     master=self.root,
-        #     parent=self.tray_title,
-        #     title=STRINGS.SETTINGS_SCREEN.MINIMIZE_TO_TRAY.TITLE,
-        #     description=STRINGS.SETTINGS_SCREEN.MINIMIZE_TO_TRAY.DESC,
-        # )
-
-        # self.tray_title.place(
-        #     x = SETTINGS_WINDOW_MARGIN + 10,
-        #     y = SETTINGS_WINDOW_MARGIN + self.language_dropdown._tooltip.get_height() + ENTRY_HEIGHT + 35,
-        # )
-
-        # # Switch placed accurately to the right of the rendered text bounds
-        # self.tray_switch.place(
-        #     x = SETTINGS_WINDOW_MARGIN + 10 + self.tray_title._tooltip.get_width() + 15,
-        #     y = SETTINGS_WINDOW_MARGIN + self.language_dropdown._tooltip.get_height() + ENTRY_HEIGHT + 35,
-        # )
-
-        # # Description tooltip block
-        # self.tray_switch._tooltip = SettingsTooltip(
-        #     master=self.root,
-        #     parent=self.root,
-        #     title="",
-        #     description="",
-        # )
 
         # # -------------------------- #
         # -------------------------- #
@@ -318,8 +304,8 @@ class SettingsScreen():
             fg_color=COLOR.GRAY,
             font=FONT.ENTRY_ARIAL,
             border_width=0,
-            height=90,
-            width=350,
+            height=ARGUMENTS_ENTRY.h,
+            width=ARGUMENTS_ENTRY.w,
         )
 
         self.arguments_entry._textbox.configure(selectbackground=COLOR.DARK_GRAY)
@@ -337,10 +323,12 @@ class SettingsScreen():
             parent=self.arguments_entry,
             title=STRINGS.SETTINGS_SCREEN.LAUNCH_OPTIONS.TITLE,
             description=STRINGS.SETTINGS_SCREEN.LAUNCH_OPTIONS.DESC,
+            icon_tooltip=STRINGS.SETTINGS_SCREEN.LAUNCH_OPTIONS.LINK,
+            icon_url=LAUNCH_OPTIONS_GUIDE_URL,
         )
 
         self.arguments_entry.place(
-            x = WINDOW_WIDTH - SETTINGS_WINDOW_MARGIN - 350,
+            x = WINDOW_WIDTH - SETTINGS_WINDOW_MARGIN - ARGUMENTS_ENTRY.w,
             y = SETTINGS_WINDOW_MARGIN + self.arguments_entry._tooltip.get_height(),
         )
 
@@ -379,11 +367,13 @@ class SettingsScreen():
 
         self.button_menu.update()
 
-        menu_width = self.button_menu.winfo_reqwidth() / self.root._apply_widget_scaling(1)
+        menu_width  = self.button_menu.winfo_reqwidth()  / self.root._apply_widget_scaling(1.0)
+        menu_height = self.button_menu.winfo_reqheight() / self.root._apply_widget_scaling(1.0)
 
+        # Bottom right corner, mirroring the back button, instead of floating under the textbox.
         self.button_menu.place(
-            x = WINDOW_WIDTH - SETTINGS_WINDOW_MARGIN - menu_width * 1.25,
-            y = SETTINGS_WINDOW_MARGIN + 250,
+            x = WINDOW_WIDTH  - SETTINGS_WINDOW_MARGIN - menu_width,
+            y = WINDOW_HEIGHT - WINDOW_MARGIN - SIZE.LOGS_CLOSE.h - BUTTON_MENU_GAP - menu_height,
         )
 
         # -------------------------- #
@@ -414,8 +404,8 @@ class SettingsScreen():
         self.version_label.update()
 
         self.version_label.place(
-            x = WINDOW_WIDTH  - WINDOW_MARGIN - self.version_label.winfo_reqwidth() / self.version_label._apply_widget_scaling(1),
-            y = WINDOW_HEIGHT - WINDOW_MARGIN - self.version_label.winfo_reqheight() / self.version_label._apply_widget_scaling(1),
+            x = WINDOW_WIDTH  - WINDOW_MARGIN - self.version_label.winfo_reqwidth() / self.version_label._apply_widget_scaling(1.0),
+            y = WINDOW_HEIGHT - WINDOW_MARGIN - self.version_label.winfo_reqheight() / self.version_label._apply_widget_scaling(1.0),
         )
 
         # -------------------------- #

@@ -45,6 +45,12 @@ SHARD_STATUS:
     STOPPING:   Đang dừng...
     RESTARTING: Đang khởi động lại...
 
+    STEP:
+        LOADING:  Đang tải...
+        MODS:     Mods...
+        ASSETS:   Tài nguyên...
+        SESSION:  Hoàn tất...
+
 CLUSTER_STATS:
     DAY: "Ngày: "
     SEASON: "Mùa: "
@@ -66,6 +72,13 @@ UPDATE_POPUP:
         DOWNLOADING: Đang tải về... Sẽ không tốn nhiều thời gian đâu!
         FAILED: Tải về thất bại. Đây có thể do sự cố mạng bên phía bạn hoặc do máy chủ Github. Vui lòng thử lại sau.
 
+PATCH_NOTES_POPUP:
+    DESCRIPTION: |-
+        Chào mừng đến với phiên bản {APP_VERSION}.
+
+        Hãy bấm vào nút bên dưới để xem những gì mới trong bản phát hành này.
+    BUTTON: Ghi chú bản cập nhật
+
 LOG_SCREEN:
     ENTRY_PLACEHOLDER: Chạy các lệnh console trên {shard}. Bấm ENTER để thực thi.
     ENTRY_PLACEHOLDER_OFFLINE: Shard này đang ngoại tuyến. Khởi động máy chủ để chạy các lệnh.
@@ -75,6 +88,8 @@ LOG_SCREEN:
     SHARD_NAME_TITLE: "Shard:"
     SHARD_MEMORY_TITLE: "Bộ nhớ:"
     SHARD_MEMORY_FMT: "{mb} MB ({percent}%)"
+    SEARCH_RESULTS: "{index} / {total}"
+    SEARCH_NO_RESULTS: Không tìm thấy kết quả
 
 SMALL_BUTTON:
     SAVE: Lưu
@@ -86,6 +101,10 @@ COMMAND_CONFIRMATION:
     QUIT: Bạn có chắc chắn muốn dừng máy chủ mà không lưu lại không? Dữ liệu chưa lưu sẽ bị mất!
     RESET: Bạn có chắc chắn muốn khởi động lại máy chủ mà không lưu lại không? Dữ liệu chưa lưu sẽ bị mất!
     ROLLBACK: Bạn muốn rollback bao nhiêu bản lưu (save)?
+    CLOSE_APP: |-
+        Máy chủ vẫn đang chạy.
+
+        Đóng {APP_NAME} sẽ lưu thế giới và tắt máy chủ. Bạn có muốn đóng ngay không?
 
 COMMAND_ANNOUNCEMENT:
     SAVE: Đang lưu thế giới...
@@ -99,6 +118,26 @@ ENTRY:
     CLUSTER_TITLE: Thư Mục Cluster
     TOKEN_TITLE: Server Token
     ENTRY_INVALID_INPUT: "✱ Dữ liệu đầu vô không hợp lệ"
+
+    INVALID:
+        EMPTY: "✱ Bắt buộc"
+        MISSING: "✱ Thư mục không hợp lệ"
+        NO_EXECUTABLE: "✱ Thư mục không hợp lệ"
+        NO_CLUSTER_INI: "✱ Cluster không hợp lệ"
+        NO_MASTER: "✱ Cluster không hợp lệ"
+        CLOUD_SAVES: "✱ Lưu trên đám mây không được hỗ trợ"
+        WRONG_LOCATION: "✱ Cluster không hợp lệ"
+        TOKEN_FORMAT: "✱ Token không hợp lệ"
+
+    INVALID_HELP:
+        EMPTY: Trường này phải được điền trước khi máy chủ có thể khởi động.
+        MISSING: Thư mục này không tồn tại. Có thể nó đã bị di chuyển, đổi tên hoặc xóa.
+        NO_EXECUTABLE: Đây không phải là thư mục game. Nó phải chứa bin64/dontstarve_dedicated_server_nullrenderer_x64.exe.
+        NO_CLUSTER_INI: Thư mục này không có cluster.ini. Chọn một thế giới được tạo bởi menu trong game, như Cluster_1.
+        NO_MASTER: Cluster này không có thư mục Master.
+        CLOUD_SAVES: Lưu trên đám mây không được hỗ trợ.
+        WRONG_LOCATION: Cluster phải nằm trong thư mục tài khoản Klei của bạn, thường là Documents/Klei/DoNotStarveTogether/<số>/.
+        TOKEN_FORMAT: Đây không phải là token máy chủ hợp lệ.
 
 ERROR:
     TOKEN_INVALID: |-
@@ -178,6 +217,7 @@ SETTINGS_SCREEN:
     LAUNCH_OPTIONS:
         TITLE: Tùy Chọn Khởi Chạy
         DESC: Người sử dụng nâng cao có thể nhập các tùy chọn khởi chạy máy chủ. Sử dụng không đúng cách có thể dẫn tới lỗi ngoài dự kiến.
+        LINK: Bấm vào đây để xem tất cả các tùy chọn khởi chạy.
 
     MINIMIZE_TO_TRAY:
         TITLE: Thu nhỏ vào khay hệ thống

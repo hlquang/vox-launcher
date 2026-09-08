@@ -5,7 +5,7 @@ from pathlib import Path
 import traceback, requests
 import subprocess, threading
 
-from customtkinter import CTk, CTkLabel
+from customtkinter import CTk, CTkLabel, set_widget_scaling, set_window_scaling
 from tkinter import StringVar, Toplevel
 
 from constants import *
@@ -17,7 +17,7 @@ from settings_manager import SettingsManager, Settings
 from widgets.buttons import CustomButton, ImageButton
 from widgets.entries import TokenEntry, DirectoryEntry, ClusterDirectoryEntry
 from widgets.frames import ScrollableShardGroupFrame
-from widgets.misc import Tooltip, CommandPopUp, ServerErrorPopUp, AppExceptionPopUp, AppOutdatedPopUp, LaunchDataPopUp, ClusterStats, RestartRequiredPopUp
+from widgets.misc import Tooltip, CommandPopUp, ServerErrorPopUp, AppExceptionPopUp, AppOutdatedPopUp, LaunchDataPopUp, ClusterStats, RestartRequiredPopUp, PatchNotesPopUp
 from widgets.settings_screen import SettingsScreen
 from tray import SystemTray
 
@@ -78,6 +78,7 @@ GAME_INITIAL_DIR = GAME_DIR and GAME_DIR.parent or Path.home()
 CLUSTER_INITIAL_DIR = get_clusters_directory()
 
 DEBUG_MODE = LOGGER == "development"
+DEBUG_FORCE_PATCH_NOTES = False
 
 # ------------------------------------------------------------------------------------ #
 
@@ -93,15 +94,11 @@ class App(CTk):
     def __init__(self, **kwargs):
         super().__init__( **kwargs)
 
+        # Must come before the scaling/centering calls, which read back the window size.
         self.geometry(f"{WINDOW_WIDTH}x{WINDOW_HEIGHT}")
 
-        screen_width  = self.winfo_screenwidth()
-        screen_height = self.winfo_screenheight()
-
-        x = (screen_width - WINDOW_WIDTH) // 2
-        y = (screen_height - WINDOW_HEIGHT) // 2
-
-        self.geometry(f"+{x}+{y}")
+        self.fit_scaling_to_screen()
+        self.center_on_screen()
 
         self.settings = SettingsManager(app=self)
         self.settings.load()
@@ -137,6 +134,34 @@ class App(CTk):
         else:
             self.system_tray.hide()
 
+    def fit_scaling_to_screen(self):
+        """ Shrinks the UI scale when the window would be larger than the display. """
+
+        usable_width  = self.winfo_screenwidth()
+        usable_height = self.winfo_screenheight() * 0.92 # Leaves room for the taskbar.
+
+        factor = min(
+            usable_width  / self._apply_window_scaling(WINDOW_WIDTH),
+            usable_height / self._apply_window_scaling(WINDOW_HEIGHT),
+            1.0,
+        )
+
+        if factor < 1.0:
+            logger.info("Window is larger than the screen, scaling the UI down to %d%%.", round(factor * 100))
+
+            # These multiply the auto-detected DPI scaling and re-apply the window geometry.
+            set_widget_scaling(factor)
+            set_window_scaling(factor)
+
+    def center_on_screen(self):
+        """ Centers the window, accounting for DPI scaling. """
+
+        # CTk.geometry() scales width/height but passes x/y through untouched.
+        x = (self.winfo_screenwidth()  - self._apply_window_scaling(WINDOW_WIDTH))  // 2
+        y = (self.winfo_screenheight() - self._apply_window_scaling(WINDOW_HEIGHT)) // 2
+
+        self.geometry(f"+{max(0, x)}+{max(0, y)}")
+
     def create_widgets(self):
         """
         Top section:
@@ -148,7 +173,7 @@ class App(CTk):
         self.game_entry = DirectoryEntry(
             master=self,
             tooltip=STRINGS.ENTRY.GAME_TITLE,
-            validate_fn=validate_game_directory,
+            validate_fn=get_game_directory_error,
             initialdir=GAME_INITIAL_DIR,
             size=SIZE.DIRECTORY_ENTRY,
             pos=POS.GAME_DIRECTORY,
@@ -157,7 +182,7 @@ class App(CTk):
         self.cluster_entry = ClusterDirectoryEntry(
             master=self,
             tooltip=STRINGS.ENTRY.CLUSTER_TITLE,
-            validate_fn=validate_cluster_directory,
+            validate_fn=get_cluster_directory_error,
             initialdir=CLUSTER_INITIAL_DIR,
             size=SIZE.DIRECTORY_ENTRY,
             pos=POS.CLUSTER_DIRECTORY,
@@ -300,6 +325,7 @@ class App(CTk):
         self.update_popup = AppOutdatedPopUp(root=self)
         self.launch_data_popup = LaunchDataPopUp(root=self)
         self.restart_popup = RestartRequiredPopUp(root=self)
+        self.patch_notes_popup = PatchNotesPopUp(root=self)
 
         self.settings_screen = SettingsScreen(master=self)
 
@@ -328,6 +354,19 @@ class App(CTk):
         # self.quit_button.show()
         # self.reset_button.show()
         # self.rollback_button.show()
+
+        # The update check runs afterwards, so the two modals can never stack.
+        self.after(300, self.show_patch_notes)
+
+    def show_patch_notes(self):
+        """ Shows the patch notes popup once, after an update downloaded within the app. """
+
+        forced = DEBUG_MODE and DEBUG_FORCE_PATCH_NOTES
+
+        if forced or self.settings.get(Settings.SHOW_PATCH_NOTES):
+            self.settings.set(Settings.SHOW_PATCH_NOTES, False)
+
+            self.patch_notes_popup.create(STRINGS.PATCH_NOTES_POPUP.DESCRIPTION)
 
         self.check_for_updates()
 
@@ -491,6 +530,42 @@ class App(CTk):
 
     def stop_shards(self):
         self.shard_group.stop_all_shards()
+
+    def on_close(self):
+        """ Warns before closing with a live server, then lets it save before exiting. """
+
+        shard = getattr(self, "master_shard", None)
+
+        if shard is not None and shard.is_running():
+            confirmed, _ = self.confirmation_popup.create(STRINGS.COMMAND_CONFIRMATION.CLOSE_APP)
+
+            if not confirmed:
+                return
+
+            self.stop_shards()
+            self._close_when_shards_stop()
+
+            return
+
+        self.destroy()
+
+    def _close_when_shards_stop(self, waited=0):
+        """ The server is killed with this process, so give it a moment to finish saving. """
+
+        SHUTDOWN_TIMEOUT = 30000
+        POLL_INTERVAL = 250
+
+        still_running = any(frame.server.is_running() for frame in self.shard_group.get_shards())
+
+        if not still_running or waited >= SHUTDOWN_TIMEOUT:
+            if still_running:
+                logger.warning("Shards did not shut down in time, closing anyway.")
+
+            self.destroy()
+
+            return
+
+        self.after(POLL_INTERVAL, self._close_when_shards_stop, waited + POLL_INTERVAL)
 
     def restart_application(self, *args, **kwargs):
         """Restart the PyInstaller-exe or Python script safely."""

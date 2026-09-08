@@ -6,12 +6,16 @@ from PIL import Image
 import requests, os
 
 from strings import STRINGS
-from constants import COLOR, SIZE, POS
+from constants import COLOR, SIZE, POS, Size, PATCH_NOTES_URL
+from settings_manager import Settings
 from widgets.frames import CustomFrame
-from helpers import resource_path, open_path, open_github_issue, add_folder_to_zip
+from helpers import resource_path, open_path, open_github_issue, open_url, add_folder_to_zip
 from fonts import FONT
 
 class ClusterStats:
+    # Only these keys are accepted from the server output.
+    STAT_KEYS = ("day", "season", "players")
+
     def __init__(self, master) -> None:
         self.day     = StringVar()
         self.season  = StringVar()
@@ -64,7 +68,7 @@ class ClusterStats:
         self.show()
 
         for k, v in data.items():
-            if hasattr(self, k):
+            if k in self.STAT_KEYS:
                 getattr(self, k).set(str(v))
 
     def show(self):
@@ -76,26 +80,38 @@ class ClusterStats:
     def hide(self):
         self._frame.place_forget()
 
+TOOLTIP_PADDING = 11
+TOOLTIP_GAP = 8
+TOOLTIP_LINE_GAP = 6
+TOOLTIP_WINDOW_MARGIN = 14
+TOOLTIP_TRANSPARENT_COLOR = "#010203"  # Keyed out by the window manager, so it must not appear in the tooltip.
+
 class Tooltip:
-    def __init__(self, master, text, image, pos, image_size, onclick=None):
+    def __init__(self, master=None, text="", image=None, pos=None, image_size=None, onclick=None, widget=None, above=False):
         self.text = text
         self.pos = pos
         self.image_size = image_size
         self.tooltip = None
         self.taskid = None
+        self.above = above
+        self.cursor = onclick and "hand2" or None
 
-        image = CTkImage(Image.open(resource_path(image)), size=self.image_size)
+        if widget is not None:
+            # Attached to an existing widget rather than owning an icon of its own.
+            self.widget = widget
+        else:
+            image = CTkImage(Image.open(resource_path(image)), size=self.image_size)
 
-        self.widget = CTkLabel(
-            master=master,
-            image=image,
-            text='',
-        )
+            self.widget = CTkLabel(
+                master=master,
+                image=image,
+                text='',
+            )
 
-        self.widget.place(
-            x=pos.x,
-            y=pos.y,
-        )
+            self.widget.place(
+                x=pos.x,
+                y=pos.y,
+            )
 
         self.widget.bind("<Enter>", self.show_tooltip_with_delay)
         self.widget.bind("<Leave>", self.hide_tooltip)
@@ -103,40 +119,100 @@ class Tooltip:
         if onclick:
             self.widget.bind("<Button-1>", onclick)
 
+    def set_text(self, text):
+        self.text = text
+
+        if not text:
+            self.hide_tooltip()
+
     def show_tooltip_with_delay(self, event=None):
+        if not self.text:
+            return
+
         if self.taskid:
             self.widget.after_cancel(self.taskid)
 
         self.taskid = self.widget.after(250, self.show_tooltip)
 
     def show_tooltip(self):
-        self.widget.configure(cursor="hand2")
+        if self.cursor:
+            self.widget.configure(cursor=self.cursor)
 
         self.tooltip = Toplevel(self.widget)
         self.tooltip.wm_overrideredirect(True)
+        self.tooltip.configure(bg=TOOLTIP_TRANSPARENT_COLOR)
+        self.tooltip.wm_attributes("-transparentcolor", TOOLTIP_TRANSPARENT_COLOR)
 
-        self.tooltip_label = CTkLabel(
-            self.tooltip,
-            text=self.text,
-            fg_color=COLOR.GRAY,
-            bg_color=COLOR.DARK_GRAY,
-            text_color=COLOR.WHITE,
+        self.tooltip_frame = CustomFrame(
+            master=self.tooltip,
+            color=COLOR.GRAY,
+            size=Size(0, 0),
             corner_radius=10,
-            font=FONT.ENTRY,
-            wraplength=330,
+            bg_color=TOOLTIP_TRANSPARENT_COLOR,
+            border_color=COLOR.GRAY_HOVER,
+            border_width=3,
         )
 
-        padding = self.tooltip_label._apply_widget_scaling(18)
+        padding = self.tooltip_frame._apply_widget_scaling(TOOLTIP_PADDING)
+        line_gap = self.tooltip_frame._apply_widget_scaling(TOOLTIP_LINE_GAP)
 
-        self.tooltip_label.pack(ipadx=padding, ipady=padding)
+        # One label per line, so the gap between them can be controlled.
+        lines = self.text.split("\n")
+
+        for index, line in enumerate(lines):
+            label = CTkLabel(
+                self.tooltip_frame,
+                width=0,
+                height=0,
+                text=line,
+                fg_color="transparent",
+                text_color=COLOR.WHITE,
+                font=FONT.ENTRY,
+                wraplength=330,
+            )
+
+            label.pack(
+                padx = padding,
+                pady = (
+                    index == 0 and padding or line_gap,
+                    index == len(lines) - 1 and padding or 0,
+                ),
+            )
+
+        self.tooltip_frame.pack()
 
         try:
-            self.tooltip_label.update()
+            self.tooltip_frame.update()
 
-            # This is the result of a long time of try and error... not sure what's going on, but it "works". 36.67 is just an offset.
-            x = self.widget.winfo_rootx() - self.tooltip_label.winfo_reqwidth() - self.tooltip_label._apply_widget_scaling(36.67) - padding
-            y = self.widget.winfo_rooty() - self.tooltip_label.winfo_reqheight()/4 - self.tooltip_label._apply_widget_scaling(5) - padding/2
-            #                                                                            ^ related to corner_radius, likely
+            tooltip_width  = self.tooltip_frame.winfo_reqwidth()
+            tooltip_height = self.tooltip_frame.winfo_reqheight()
+
+            gap = self.tooltip_frame._apply_widget_scaling(TOOLTIP_GAP)
+            margin = self.tooltip_frame._apply_widget_scaling(TOOLTIP_WINDOW_MARGIN)
+
+            window = self.widget.winfo_toplevel()
+
+            window_left   = window.winfo_rootx()    + margin
+            window_top    = window.winfo_rooty()    + margin
+            window_right  = window_left + window.winfo_width()  - margin * 2
+            window_bottom = window_top  + window.winfo_height() - margin * 2
+
+            above_y = self.widget.winfo_rooty() - tooltip_height - gap
+            below_y = self.widget.winfo_rooty() + self.widget.winfo_height() + gap
+
+            # Centered on the widget, flipped to the other side when there's no room.
+            x = self.widget.winfo_rootx() + self.widget.winfo_width()/2 - tooltip_width/2
+            y = self.above and above_y or below_y
+
+            if self.above and y < window_top:
+                y = below_y
+
+            elif not self.above and y + tooltip_height > window_bottom:
+                y = above_y
+
+            # Never overflow the app window.
+            x = max(window_left, min(x, window_right  - tooltip_width))
+            y = max(window_top,  min(y, window_bottom - tooltip_height))
 
             self.tooltip.wm_geometry(f"+{round(x)}+{round(y)}")
         except Exception:
@@ -144,7 +220,8 @@ class Tooltip:
             self.tooltip = None
 
     def hide_tooltip(self, event=None):
-        self.widget.configure(cursor="arrow")
+        if self.cursor:
+            self.widget.configure(cursor="arrow")
 
         if self.taskid:
             self.widget.after_cancel(self.taskid)
@@ -176,7 +253,8 @@ class PopUp:
         self.popup.wm_overrideredirect(True)
         self.popup.grab_set()  # Make other windows not clickable.
 
-        self.popup.grid_columnconfigure((0, slider_fn and 4 or 2), weight=1)
+        # Each button spans two columns, so all four must stay equal or they end up different widths.
+        self.popup.grid_columnconfigure((0, 1, 2, 3), weight=1, uniform="popup")
         self.popup.rowconfigure(0, weight=1)
 
         self.popup._frame = CustomFrame(
@@ -207,7 +285,8 @@ class PopUp:
             hover_color=COLOR.DARK_GRAY,
             text_color=COLOR.WHITE,
             border_color=COLOR.WHITE,
-            border_width=0.4,
+            border_width=0,
+
             text=self.button_1_text,
             font=FONT.SMALL_BUTTON,
             command=self.button_1_callback,
@@ -220,7 +299,7 @@ class PopUp:
             hover_color=COLOR.DARK_GRAY,
             text_color=COLOR.WHITE,
             border_color=COLOR.WHITE,
-            border_width=0.4,
+            border_width=0,
             text=self.button_2_text,
             font=FONT.SMALL_BUTTON,
             command=self.button_2_callback
@@ -274,8 +353,8 @@ class PopUp:
 
         self.popup._frame.configure(
             bg_color = COLOR.DARK_GRAY,
-            width = popup_width / self.popup._frame._apply_widget_scaling(1),
-            height = popup_height / self.popup._frame._apply_widget_scaling(1),
+            width = popup_width / self.popup._frame._apply_widget_scaling(1.0),
+            height = popup_height / self.popup._frame._apply_widget_scaling(1.0),
         )
 
         master_x = self.root.winfo_rootx()
@@ -287,10 +366,17 @@ class PopUp:
         x = master_x + (master_width - popup_width) // 2
         y = master_y + (master_height - popup_height) // 2
 
+        # The popup is modal and has no title bar, so an off-screen one would be unrecoverable.
+        x = max(0, min(x, self.popup.winfo_screenwidth()  - popup_width))
+        y = max(0, min(y, self.popup.winfo_screenheight() - popup_height))
+
         # Set the window's position.
         self.popup.wm_geometry('+{}+{}'.format(x, y))
 
+        self.popup.bind("<Escape>", lambda event: self.dismiss())
+
         self.popup.deiconify()
+        self.popup.focus_force()  # Without focus the key bindings never fire.
 
         self.root.wait_window(self.popup)
 
@@ -313,6 +399,11 @@ class PopUp:
 
     def button_2_callback(self):
         self._close()
+
+    def dismiss(self):
+        """ Bound to Escape. Button 2 is the dismissing one on most popups. """
+
+        self.button_2_callback()
 
 class CommandPopUp(PopUp):
     def __init__(self, root):
@@ -345,6 +436,9 @@ class ServerErrorPopUp(PopUp):
         if path.exists():
             open_path(path)
 
+    def dismiss(self):
+        self.button_1_callback()
+
 class AppExceptionPopUp(PopUp):
     def __init__(self, root):
         super().__init__(root)
@@ -366,6 +460,9 @@ class AppExceptionPopUp(PopUp):
 
     def button_2_callback(self):
         open_github_issue(template="app_crash_report", traceback=self.traceback)
+
+    def dismiss(self):
+        pass  # Restarting the app is too destructive to trigger with Escape.
 
 class LaunchDataPopUp(PopUp):
     def __init__(self, root):
@@ -402,6 +499,26 @@ class RestartRequiredPopUp(PopUp):
 
         self._close()
 
+class PatchNotesPopUp(PopUp):
+    def __init__(self, root):
+        super().__init__(root)
+        self.button_2_text = STRINGS.PATCH_NOTES_POPUP.BUTTON
+
+    def button_1_callback(self):
+        self.confirmed = True
+
+        self._close()
+
+    def button_2_callback(self):
+        open_url(PATCH_NOTES_URL)
+
+        self.confirmed = True
+
+        self._close()
+
+    def dismiss(self):
+        self.button_1_callback()
+
 class AppOutdatedPopUp(PopUp):
     def __init__(self, root):
         super().__init__(root)
@@ -425,8 +542,8 @@ class AppOutdatedPopUp(PopUp):
         popup_height = self.popup.winfo_reqheight()
 
         self.popup._frame.configure(
-            width = popup_width / self.popup._frame._apply_widget_scaling(1),
-            height = popup_height / self.popup._frame._apply_widget_scaling(1),
+            width = popup_width / self.popup._frame._apply_widget_scaling(1.0),
+            height = popup_height / self.popup._frame._apply_widget_scaling(1.0),
         )
 
         self.popup._frame.update()
@@ -455,6 +572,9 @@ class AppOutdatedPopUp(PopUp):
                     file.write(response.content)
                     file.close()
 
+                    # Set before zipping, so the new version's savedata carries the flag.
+                    self.root.settings.set(Settings.SHOW_PATCH_NOTES, True)
+
                     # Copy save data from current version.
                     savedata = resource_path("savedata")
                     data_dir = Path("appdata")
@@ -467,6 +587,8 @@ class AppOutdatedPopUp(PopUp):
 
                     self.confirmed = True
                     self._close()
+
+                    return
 
                 else:
                     self.set_text(text=STRINGS.UPDATE_POPUP.DESCRIPTION.DEFAULT)

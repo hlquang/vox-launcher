@@ -19,6 +19,15 @@ logger = logging.getLogger(LOGGER)
 
 PROCESS_ID = os.getpid()
 
+# Log phrases that mark a boot step, in the order the server reaches them.
+# Timings are from a clean local boot; mods and bigger worlds stretch MODS and ASSETS the most.
+STARTING_STEPS = (
+    ("LOADING LUA",                     "LOADING"),  # ~1s
+    ("ModIndex: Beginning normal load", "MODS"   ),  # ~4s, runs twice (frontend, then sim)
+    ("LOAD BE",                         "ASSETS" ),  # ~7-9s, longest phase
+    ("Begin Session",                   "SESSION"),  # ~2-4s until the shard is online
+)
+
 # ------------------------------------------------------------------------------------ #
 
 class StdoutMock(TextIOWrapper):
@@ -38,7 +47,9 @@ class StdoutMock(TextIOWrapper):
 class DedicatedServerShard():
     def __init__(self, app, shard_frame) -> None:
         self.process = None
+        self.task = None
         self.app = app
+        self.starting_step = -1
 
         self.shard_frame = shard_frame
         self.shard = shard_frame.code
@@ -60,15 +71,13 @@ class DedicatedServerShard():
             # Dev build executable.
             exe = (cwd / "dontstarve_dedicated_server_r_x64").resolve()
 
-        args = f"""
-            {exe}
-            -cluster {cluster}
-            -shard {self.shard}
-            -monitor_parent_process {PROCESS_ID}
-            -token {token}
-        """
-
-        args = args.split()
+        args = [
+            str(exe),
+            "-cluster", str(cluster),
+            "-shard", str(self.shard),
+            "-monitor_parent_process", str(PROCESS_ID),
+            "-token", token,
+        ]
 
         if launch_data.ownerdir:
             args.append("-ownerdir")
@@ -123,6 +132,7 @@ class DedicatedServerShard():
 
         logger.info(f"Starting {self.shard} shard...")
 
+        self.starting_step = -1
         self.shard_frame.set_starting()
 
         args, cwd = self.get_arguments(launch_data)
@@ -221,6 +231,7 @@ class DedicatedServerShard():
 
         self.shard_frame.add_text_to_log_screen(text)
 
+        self.handle_starting_progress(text=text)
         self.handle_output_keywords(text=text)
 
         if self.shard_frame.is_master:
@@ -230,6 +241,17 @@ class DedicatedServerShard():
                 self.app.cluster_stats.update(vox_data)
 
         return True, None
+
+    def handle_starting_progress(self, text):
+        """ A chunk can span several steps and some markers are logged again later, so only ever move forward. """
+
+        if not self.shard_frame.is_starting():
+            return
+
+        for index, (phrase, step) in enumerate(STARTING_STEPS):
+            if index > self.starting_step and phrase in text:
+                self.starting_step = index
+                self.shard_frame.set_starting_step(step)
 
     def handle_output_keywords(self, text):
         if "[Shard] Stopping" in text:

@@ -14,11 +14,15 @@ class Settings:
     MINIMIZE_TO_TRAY = "MINIMIZE_TO_TRAY"
     AUTO_LAUNCH = "AUTO_LAUNCH"
 
+    # Set when an update is downloaded in-app, so the next launch shows the patch notes.
+    SHOW_PATCH_NOTES = "SHOW_PATCH_NOTES"
+
     DEFAULTS = {
         LANGUAGE: get_default_language_code(),
         LAUNCH_OPTIONS: "",
         MINIMIZE_TO_TRAY: False,
         AUTO_LAUNCH: False,
+        SHOW_PATCH_NOTES: False,
     }
 
 class SettingsManager:
