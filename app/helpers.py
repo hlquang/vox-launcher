@@ -723,6 +723,37 @@ def redact_token(args):
 
 # ----------------------------------------------------------------------------------------- #
 
+def is_newer_version(remote, local):
+    """
+    Compares two version strings, ignoring any leading 'v' and any suffix.
+
+    Args:
+        remote (str): the version to check, e.g. "v1.4.1".
+        local (str): the version to check against, e.g. "v1.4.0".
+
+    Returns:
+        bool: True when remote is a higher version than local.
+    """
+
+    def parse(version):
+        return [int(part) for part in re.findall(r"\d+", version or "")]
+
+    remote_parts = parse(remote)
+    local_parts = parse(local)
+
+    if not remote_parts:
+        return False
+
+    # Zero padded, so "1.4" and "1.4.0" compare as equal.
+    length = max(len(remote_parts), len(local_parts))
+
+    remote_parts += [0] * (length - len(remote_parts))
+    local_parts  += [0] * (length - len(local_parts))
+
+    return remote_parts > local_parts
+
+# ----------------------------------------------------------------------------------------- #
+
 def get_memory_usage(pid):
     try:
         process = psutil.Process(pid)

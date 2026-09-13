@@ -345,7 +345,7 @@ class App(CTk):
 
                 remote_version = Path(response.url).name
 
-                if response.status_code == 200 and remote_version != APP_VERSION[1:]:
+                if is_newer_version(remote_version, APP_VERSION):
                     logger.info("A new version is available: v%s (running %s).", remote_version, APP_VERSION)
 
                     self.after(300, self.update_popup.create, STRINGS.UPDATE_POPUP.DESCRIPTION.DEFAULT)
