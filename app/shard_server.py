@@ -61,8 +61,7 @@ class DedicatedServerShard():
         game_directory    = Path(self.app.game_entry.get()   )
         cluster_directory = Path(self.app.cluster_entry.get())
 
-        token = self.app.token_entry.get()
-        cluster = get_cluster_name(cluster_directory)
+        token = self.app.token_entry.get().strip()
 
         cwd = (game_directory / "bin64").resolve()
         exe = (cwd / "dontstarve_dedicated_server_nullrenderer_x64").resolve()
@@ -71,35 +70,46 @@ class DedicatedServerShard():
             # Dev build executable.
             exe = (cwd / "dontstarve_dedicated_server_r_x64").resolve()
 
+        paths = get_cluster_launch_paths(cluster_directory)
+
         args = [
             str(exe),
-            "-cluster", str(cluster),
+            "-cluster", paths["cluster"],
             "-shard", str(self.shard),
             "-monitor_parent_process", str(PROCESS_ID),
-            "-token", token,
         ]
 
-        if launch_data.ownerdir:
-            args.append("-ownerdir")
-            args.append(launch_data.ownerdir)
+        if token:
+            args.append("-token")
+            args.append(token)
         else:
-            logger.warning("Starting shard: missing user dir.")
+            logger.warning("Starting shard: missing token.")
 
-        if launch_data.persistent_storage_root:
+        if paths["persistent_storage_root"]:
             args.append("-persistent_storage_root")
-            args.append(launch_data.persistent_storage_root)
+            args.append(paths["persistent_storage_root"])
         else:
-            logger.warning("Starting shard: missing storage root.")
+            logger.warning(f"Starting shard: couldn't resolve the storage root from '{cluster_directory}'.")
 
-        if launch_data.ugc_directory:
+        if paths["conf_dir"]:
+            args.append("-conf_dir")
+            args.append(paths["conf_dir"])
+        else:
+            logger.warning(f"Starting shard: couldn't resolve the config directory from '{cluster_directory}'.")
+
+        if paths["ownerdir"]:
+            args.append("-ownerdir")
+            args.append(paths["ownerdir"])
+
+        ugc_directory = launch_data and launch_data["ugc_directory"]
+
+        if ugc_directory:
             args.append("-ugc_directory")
-            args.append(launch_data.ugc_directory)
+            args.append(ugc_directory)
         else:
             logger.warning("Starting shard: missing mods directory.")
 
-        extra_args = self.app.settings.get(Settings.LAUNCH_OPTIONS).split()
-
-        args = args + extra_args
+        args = args + split_launch_options(self.app.settings.get(Settings.LAUNCH_OPTIONS))
 
         return args, str(cwd)
 

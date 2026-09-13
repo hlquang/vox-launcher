@@ -5,6 +5,7 @@ import ctypes.wintypes
 import webbrowser
 import re, json, sys, math
 import logging
+import shlex
 import threading
 import psutil, os, zipfile
 from urllib.parse import quote as encode_for_url
@@ -290,16 +291,13 @@ def rollback_slider_fn(app):
 # ----------------------------------------------------------------------------------------- #
 
 GAME_DIRECTORY_ONE_OF_CHILDREN = [ "bin64/dontstarve_dedicated_server_nullrenderer_x64.exe", "bin64/dontstarve_dedicated_server_r_x64.exe" ]
-CLUSTER_DIRECTORY_REQUIRED_CHILDREN = [ "cluster.ini", "Master" ]
 
-def validate_directory(directory, required_children=None, one_of_children=None) :
+def validate_game_directory(directory) -> bool:
     """
-    Checks if directory contains all required_children subpaths and/or one_of_children subpaths.
+    Checks if directory holds a dedicated server executable.
 
     Args:
-        directory (Path, str): the directory path.
-        required_children (list, None): the subpaths that directory must contain.
-        one_of_children (list, None): the subpaths that directory must contain at least one of.
+        directory (Path, str): the game directory path.
 
     Returns:
         valid (bool): valid or not.
@@ -308,29 +306,14 @@ def validate_directory(directory, required_children=None, one_of_children=None) 
     directory = Path(directory)
 
     if not directory.exists():
-        logger.debug(f"Validate Directory: directory '{directory}' doesn't exist...")
+        logger.debug(f"Validate Game Directory: directory '{directory}' doesn't exist...")
         return False
 
-    if required_children:
-        for child in required_children:
-            if not (directory / child).exists():
-                logger.debug(f"Validate Directory: required child '{child}' doesn't exist in '{directory}'...")
-                return False
-
-    if one_of_children:
-        missing_children = list(filter(lambda child: not (directory / child).exists(), one_of_children))
-
-        if one_of_children == missing_children:
-            logger.debug(f"Validate Directory: missing one of these {one_of_children} in '{directory}'...")
-            return False
+    if not any((directory / child).exists() for child in GAME_DIRECTORY_ONE_OF_CHILDREN):
+        logger.debug(f"Validate Game Directory: missing one of these {GAME_DIRECTORY_ONE_OF_CHILDREN} in '{directory}'...")
+        return False
 
     return True
-
-def validate_game_directory(directory: str) -> bool:
-    return validate_directory(directory, one_of_children=GAME_DIRECTORY_ONE_OF_CHILDREN)
-
-def validate_cluster_directory(directory: str) -> bool:
-    return validate_directory(directory, required_children=CLUSTER_DIRECTORY_REQUIRED_CHILDREN)
 
 # ----------------------------------------------------------------------------------------- #
 
@@ -592,28 +575,59 @@ def get_shard_names(cluster):
 
 # ----------------------------------------------------------------------------------------- #
 
-def get_cluster_name(path):
+def get_cluster_launch_paths(path):
     """
-    Gets the cluster relative path.
+    Splits a cluster directory into the command line arguments the server needs.
+    The game resolves a cluster as <persistent_storage_root>/<conf_dir>[/<ownerdir>]/<cluster>.
 
     Args:
-        path (Path): the cluster path.
+        path (Path, str): the cluster path.
 
     Returns:
-        cluster (str): the cluster relative path.
-
+        dict: "cluster", "ownerdir", "conf_dir" and "persistent_storage_root" keys.
     """
 
-    regex = re.compile(r'/DoNotStarveTogether(?:BetaBranch)?/(.*)')
+    path = Path(path).resolve()
 
-    match = regex.search(path.as_posix())
+    paths = { "cluster": path.name, "ownerdir": None, "conf_dir": None, "persistent_storage_root": None }
 
-    if match:
-        files = match.group(1).split("/")
+    parent = path.parent
 
-        return "/".join(files[0].isdigit() and files[1:] or files)
+    # Some users have their clusters inside a numeric (distribution platform user id) folder.
+    if parent.name.isdigit():
+        paths["ownerdir"] = parent.name
+        parent = parent.parent
 
-    return path.name
+    # parent.name is empty once we reach a drive/UNC root, so there is nothing left to split.
+    if parent.name and parent.parent != parent:
+        paths["conf_dir"] = parent.name
+        paths["persistent_storage_root"] = str(parent.parent)
+
+    return paths
+
+def split_launch_options(text):
+    """
+    Splits user provided launch options into argv entries.
+
+    Args:
+        text (str): the raw launch options.
+
+    Returns:
+        list: the individual arguments.
+    """
+
+    lexer = shlex.shlex(text or "", posix=True)
+    lexer.whitespace_split = True
+    lexer.commenters = ""
+    lexer.escape = "" # On Windows '\' is a path separator, never an escape character.
+
+    try:
+        return list(lexer)
+
+    except ValueError as e:
+        logger.warning(f"Failed to parse launch options ({e}), falling back to a whitespace split.")
+
+        return (text or "").split()
 
 # ----------------------------------------------------------------------------------------- #
 
@@ -762,8 +776,6 @@ def _check_log_file(cluster_path, save_loader):
     if _find_command_line_argument(text, "backup_log_count"):
         # If backup_log_count exists, it's likely that this cluster was launched outside of Vox.
         save_loader.save(
-            persistent_storage_root=_find_command_line_argument(text, "persistent_storage_root"),
-            ownerdir=_find_command_line_argument(text, "ownerdir"),
             ugc_directory=_find_command_line_argument(text, "ugc_directory"),
         )
 
