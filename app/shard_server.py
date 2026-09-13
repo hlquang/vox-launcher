@@ -57,7 +57,7 @@ class DedicatedServerShard():
     def is_running(self):
         return self.process and self.process.proc.poll() is None or False
 
-    def get_arguments(self, launch_data):
+    def get_arguments(self, ugc_directory):
         game_directory    = Path(self.app.game_entry.get()   )
         cluster_directory = Path(self.app.cluster_entry.get())
 
@@ -101,8 +101,6 @@ class DedicatedServerShard():
             args.append("-ownerdir")
             args.append(paths["ownerdir"])
 
-        ugc_directory = launch_data and launch_data["ugc_directory"]
-
         if ugc_directory:
             args.append("-ugc_directory")
             args.append(ugc_directory)
@@ -112,6 +110,21 @@ class DedicatedServerShard():
         args = args + split_launch_options(self.app.settings.get(Settings.LAUNCH_OPTIONS))
 
         return args, str(cwd)
+
+    def resolve_ugc_directory(self):
+        """ Workshop folder, from the game install when possible, otherwise from a previous launch's log. """
+
+        ugc_directory = get_ugc_directory(self.app.game_entry.get())
+
+        if ugc_directory:
+            return ugc_directory
+
+        launch_data = self.app.launch_data_save_loader.load()
+
+        if launch_data is None and self.shard_frame.is_master:
+            launch_data = retrieve_launch_data(self.app.cluster_entry.get(), self.app.launch_data_save_loader)
+
+        return launch_data and launch_data["ugc_directory"] or None
 
     def start(self):
         if self.is_running():
@@ -127,25 +140,20 @@ class DedicatedServerShard():
                 self.app.error_popup.create(STRINGS.ERROR.DIRECTORY_INVALID.format(directory_name=invalid_name))
             return
 
-        launch_data = self.app.launch_data_save_loader.load()
+        ugc_directory = self.resolve_ugc_directory()
 
-        if launch_data is None:
+        if ugc_directory is None:
             if self.shard_frame.is_master:
-                launch_data = retrieve_launch_data(self.app.cluster_entry.get(), self.app.launch_data_save_loader)
+                self.app.launch_data_popup.create(STRINGS.ERROR.LAUNCH_DATA_INVALID)
 
-                if launch_data is None:
-                    self.app.launch_data_popup.create(STRINGS.ERROR.LAUNCH_DATA_INVALID)
-
-                    return
-            else:
-                return
+            return
 
         logger.info(f"Starting {self.shard} shard...")
 
         self.starting_step = -1
         self.shard_frame.set_starting()
 
-        args, cwd = self.get_arguments(launch_data)
+        args, cwd = self.get_arguments(ugc_directory)
 
         #logger.debug("Starting server with these arguments: %s", " ".join(args))
 

@@ -646,6 +646,40 @@ def get_cluster_launch_paths(path):
 
     return paths
 
+STEAM_APP_ID = "322330"
+
+def get_ugc_directory(game_directory):
+    """
+    Determines the Steam Workshop (ugc) folder that holds the subscribed mods.
+
+    Steam keeps an app's workshop items in the same library the app itself lives in, under
+    <library>/steamapps/workshop/content/<app id>, and the server wants the workshop root.
+
+    Args:
+        game_directory (str, Path, None): the game install path.
+
+    Returns:
+        str | None: the workshop path, or None if the game isn't inside a Steam library.
+    """
+
+    if not game_directory:
+        return None
+
+    # <library>/steamapps/common/Don't Starve Together -> <library>/steamapps
+    steamapps = Path(game_directory).resolve().parent.parent
+
+    if steamapps.name.lower() != "steamapps":
+        logger.debug(f"get_ugc_directory: '{game_directory}' isn't inside a Steam library.")
+        return None
+
+    workshop = steamapps / "workshop"
+
+    if not (workshop / "content" / STEAM_APP_ID).is_dir():
+        logger.debug(f"get_ugc_directory: no subscribed mods found in '{workshop}'.")
+        return None
+
+    return str(workshop)
+
 def split_launch_options(text):
     """
     Splits user provided launch options into argv entries.
