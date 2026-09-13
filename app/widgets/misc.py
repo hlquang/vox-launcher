@@ -82,7 +82,7 @@ class ClusterStats:
 
 TOOLTIP_PADDING = 7
 TOOLTIP_GAP = 8
-TOOLTIP_LINE_GAP = 6
+TOOLTIP_LINE_GAP = 5
 TOOLTIP_WINDOW_MARGIN = 14
 TOOLTIP_TRANSPARENT_COLOR = "#010203"  # Keyed out by the window manager, so it must not appear in the tooltip.
 
