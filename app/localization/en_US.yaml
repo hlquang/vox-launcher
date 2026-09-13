@@ -142,6 +142,7 @@ ENTRY:
         CLOUD_SAVES: "✱ Cloud Save"
         WRONG_LOCATION: "✱ Invalid Cluster"
         TOKEN_FORMAT: "✱ Invalid Token"
+        TOKEN_REJECTED: "✱ Token Rejected"
 
     # Shown when hovering the message above.
     INVALID_HELP:
@@ -153,6 +154,7 @@ ENTRY:
         CLOUD_SAVES: Cloud saves are not supported.
         WRONG_LOCATION: Clusters must be inside your Klei account folder, usually Documents/Klei/DoNotStarveTogether/<numbers>/.
         TOKEN_FORMAT: This isn't a valid server token.
+        TOKEN_REJECTED: The server refused this token. It may have expired, been revoked, or already be in use by another running server.
 
 ERROR:
     TOKEN_INVALID: |-

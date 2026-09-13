@@ -61,7 +61,7 @@ class DedicatedServerShard():
         game_directory    = Path(self.app.game_entry.get()   )
         cluster_directory = Path(self.app.cluster_entry.get())
 
-        token = self.app.token_entry.get().strip()
+        token = self.app.token_entry.get()
 
         cwd = (game_directory / "bin64").resolve()
         exe = (cwd / "dontstarve_dedicated_server_nullrenderer_x64").resolve()
@@ -281,7 +281,7 @@ class DedicatedServerShard():
         elif "E_INVALID_TOKEN" in text or "E_EXPIRED_TOKEN" in text:
             logger.error("Invalid Token: E_INVALID_TOKEN or E_EXPIRED_TOKEN")
 
-            self.app.token_entry.toggle_warning(False)
+            self.app.token_entry.toggle_warning(False, INVALID.TOKEN_REJECTED)
             self.app.stop_shards()
 
             self.app.error_popup.create(STRINGS.ERROR.TOKEN_INVALID)
@@ -295,8 +295,6 @@ class DedicatedServerShard():
             logger.info(f"{self.shard} is now online!")
 
             self.shard_frame.set_online()
-
-            self.app.token_entry.toggle_warning(True)
 
         elif "SOCKET_PORT_ALREADY_IN_USE" in text:
             logger.error("Invalid cluster path or ports in use: SOCKET_PORT_ALREADY_IN_USE.")

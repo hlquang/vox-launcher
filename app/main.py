@@ -358,10 +358,13 @@ class App(CTk):
         if not hasattr(self, "master_shard"):
             return
 
+        self.save_entries_data()
+
         reason = get_token_error(self.token_entry.get())
 
+        self.token_entry.toggle_warning(reason is None, reason)
+
         if reason:
-            self.token_entry.toggle_warning(False, reason)
             self.error_popup.create(reason == INVALID.EMPTY and STRINGS.ERROR.TOKEN_EMPTY or STRINGS.ERROR.TOKEN_INVALID)
 
             return # Don't start the server without a usable token.

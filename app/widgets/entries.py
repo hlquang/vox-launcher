@@ -21,6 +21,7 @@ class CustomEntry(CTkFrame):
         self.entrytext = StringVar()
         self._master = master
         self.valid = None
+        self._warning_state = None
 
         super().__init__(
             master=master,
@@ -140,10 +141,14 @@ class CustomEntry(CTkFrame):
     def toggle_warning(self, valid, reason=None):
         """ Flags the entry, where reason is an INVALID key explaining what is wrong. """
 
-        self.valid = valid
+        state = (valid, reason)
 
-        if not self.valid:
+        # Live validation fires per keystroke, so only log when the verdict changes.
+        if not valid and state != self._warning_state:
             logger.info(f"Invalid input at entry {self.tooltip.cget('text')}: {reason or 'unspecified'}.")
+
+        self._warning_state = state
+        self.valid = valid
 
         self.configure(border_color=self.valid and COLOR.GRAY or COLOR.RED)
 
@@ -157,7 +162,7 @@ class CustomEntry(CTkFrame):
     def validate_text(self):
         pass
 
-    def on_text_changed(self, load=False):
+    def on_text_changed(self, *args, load=False):
         self.validate_text()
 
         # "Scroll" to the X end.
@@ -270,6 +275,15 @@ class TokenEntry(CustomEntry):
         )
 
         self.button = self._add_icon_button("assets/eye.png", self.toggle_text_visibility)
+
+        self.entrytext.trace_add("write", lambda *args: self.validate_text())
+        self.entry.bind("<FocusOut>", self.on_text_changed)
+
+    def get(self):
+        return super().get().strip()
+
+    def set_text(self, text, load=False):
+        super().set_text(text and text.strip() or "", load=load)
 
     def validate_text(self):
         reason = get_token_error(self.get())

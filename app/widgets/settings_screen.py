@@ -13,8 +13,7 @@ from fonts import FONT
 from helpers import open_github_issue, resource_path, open_folder, open_url
 from settings_manager import Settings
 
-# Options Vox already passes itself. The game matches flags by substring, so any user option that
-# merely *contains* one of these collides with it.
+# Options Vox passes itself. The game matches flags by substring, so anything containing one collides.
 INVALID_TEXTBOX_ARGS = [ "-cluster", "-shard", "-monitor_parent_process", "-token", "-ownerdir", "-persistent_storage_root", "-ugc_directory", "-conf_dir", "-config_dir" ]
 
 LAUNCH_OPTIONS_GUIDE_URL = "https://support.klei.com/hc/en-us/articles/360029556192-Dedicated-Server-Command-Line-Options-Guide"

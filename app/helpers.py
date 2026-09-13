@@ -264,7 +264,7 @@ def get_key_from_ini_file(file, key):
         logger.warning(f"Failed to read '{file}': {e}")
         return None
 
-    # Anchored, so commented out lines ('#key = value') and keys merely ending in 'key' are skipped.
+    # Anchored, so commented out lines and keys merely ending in 'key' are skipped.
     pattern = re.compile(rf'^[ \t]*{re.escape(key)}[ \t]*=(.*)$', re.MULTILINE)
 
     match = pattern.search(text)
@@ -365,6 +365,7 @@ class INVALID:
     CLOUD_SAVES = "CLOUD_SAVES"
     WRONG_LOCATION = "WRONG_LOCATION"
     TOKEN_FORMAT = "TOKEN_FORMAT"
+    TOKEN_REJECTED = "TOKEN_REJECTED"
 
 def get_game_directory_error(directory: str):
     """ Returns an INVALID reason for the game directory, or None when it's usable. """
@@ -634,12 +635,12 @@ def get_cluster_launch_paths(path):
 
     parent = path.parent
 
-    # Some users have their clusters inside a numeric (distribution platform user id) folder.
+    # Some users have their clusters inside a numeric (user id) folder.
     if parent.name.isdigit():
         paths["ownerdir"] = parent.name
         parent = parent.parent
 
-    # parent.name is empty once we reach a drive/UNC root, so there is nothing left to split.
+    # parent.name is empty once we reach a drive/UNC root.
     if parent.name and parent.parent != parent:
         paths["conf_dir"] = parent.name
         paths["persistent_storage_root"] = str(parent.parent)
@@ -651,9 +652,6 @@ STEAM_APP_ID = "322330"
 def get_ugc_directory(game_directory):
     """
     Determines the Steam Workshop (ugc) folder that holds the subscribed mods.
-
-    Steam keeps an app's workshop items in the same library the app itself lives in, under
-    <library>/steamapps/workshop/content/<app id>, and the server wants the workshop root.
 
     Args:
         game_directory (str, Path, None): the game install path.
@@ -801,7 +799,7 @@ def get_clusters_directory():
     return None
 
 def _find_command_line_argument(text, arg):
-    # The game logs every argument on a single line, so the value ends at the next ' -flag'.
+    # Every argument is logged on a single line, so the value ends at the next ' -flag'.
     pattern = re.compile(rf'(?:^|\s)-{re.escape(arg)}\s+(.+?)(?=\s-|\s*$)', re.MULTILINE)
 
     match = pattern.search(text)
@@ -848,7 +846,7 @@ def retrieve_launch_data(cluster_dir, save_loader):
 
     return None
 
-# The command line is logged in the first few lines; server logs themselves can reach hundreds of MB.
+# The command line is logged in the first few lines, but server logs can reach hundreds of MB.
 LOG_HEADER_SIZE = 64 * 1024
 
 def _check_log_file(cluster_path, save_loader):
