@@ -107,7 +107,11 @@ class CustomEntry(CTkFrame):
             sticky="s",
         )
 
-        self.invalid_tooltip = Tooltip(widget=self.invalid_text)
+        self.invalid_tooltip = Tooltip(widget=self.invalid_text, anchor=self)
+
+        # Hovering the field explains the warning too, but not while it's being edited.
+        self.invalid_tooltip.add_trigger(self.entry, can_show=lambda: not self.is_editing())
+        self.entry.bind("<FocusIn>", self.invalid_tooltip.hide_tooltip)
 
         self.toggle_warning(True)
 
@@ -131,6 +135,9 @@ class CustomEntry(CTkFrame):
 
     def get(self):
         return self.entry.get()
+
+    def is_editing(self):
+        return self.entry._entry.focus_get() is self.entry._entry
 
     def set_text(self, text, load=False):
         if text != "":

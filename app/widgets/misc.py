@@ -87,7 +87,7 @@ TOOLTIP_WINDOW_MARGIN = 14
 TOOLTIP_TRANSPARENT_COLOR = "#010203"  # Keyed out by the window manager, so it must not appear in the tooltip.
 
 class Tooltip:
-    def __init__(self, master=None, text="", image=None, pos=None, image_size=None, onclick=None, widget=None, above=False):
+    def __init__(self, master=None, text="", image=None, pos=None, image_size=None, onclick=None, widget=None, above=False, anchor=None):
         self.text = text
         self.pos = pos
         self.image_size = image_size
@@ -116,8 +116,21 @@ class Tooltip:
         self.widget.bind("<Enter>", self.show_tooltip_with_delay)
         self.widget.bind("<Leave>", self.hide_tooltip)
 
+        # What the tooltip is placed against, when that isn't the widget it pops up from.
+        self.anchor = anchor or self.widget
+
         if onclick:
             self.widget.bind("<Button-1>", onclick)
+
+    def add_trigger(self, widget, can_show=None):
+        """ Extra widget that also opens this tooltip on hover, gated by can_show. """
+
+        def on_enter(event=None):
+            if can_show is None or can_show():
+                self.show_tooltip_with_delay(event)
+
+        widget.bind("<Enter>", on_enter)
+        widget.bind("<Leave>", self.hide_tooltip)
 
     def set_text(self, text):
         self.text = text
@@ -197,11 +210,11 @@ class Tooltip:
             window_right  = window_left + window.winfo_width()  - margin * 2
             window_bottom = window_top  + window.winfo_height() - margin * 2
 
-            above_y = self.widget.winfo_rooty() - tooltip_height - gap
-            below_y = self.widget.winfo_rooty() + self.widget.winfo_height() + gap
+            above_y = self.anchor.winfo_rooty() - tooltip_height - gap
+            below_y = self.anchor.winfo_rooty() + self.anchor.winfo_height() + gap
 
-            # Centered on the widget, flipped to the other side when there's no room.
-            x = self.widget.winfo_rootx() + self.widget.winfo_width()/2 - tooltip_width/2
+            # Centered on the anchor, flipped to the other side when there's no room.
+            x = self.anchor.winfo_rootx() + self.anchor.winfo_width()/2 - tooltip_width/2
             y = self.above and above_y or below_y
 
             if self.above and y < window_top:
