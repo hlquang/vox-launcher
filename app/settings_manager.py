@@ -82,7 +82,7 @@ class SettingsManager:
         try:
             data = json.loads(self.file.read_text(encoding="utf-8", errors="backslashreplace"))
         except json.JSONDecodeError:
-            logger.warning(f"Corrupted settings file {self.file}. Creating backup.")
+            logger.warning(f"The settings file '{self.file}' is corrupted, backing it up and falling back to the defaults.")
             self.file.replace(self.file.with_suffix(".corrupt.json"))
             return False
 
@@ -90,6 +90,6 @@ class SettingsManager:
             if key in self.defaults:
                 self.values[key] = value
             else:
-                logger.warning(f"Ignoring unknown setting: {key}")
+                logger.warning(f"Ignoring the unknown setting '{key}' found in '{self.file.name}'.")
 
         return True

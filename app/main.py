@@ -81,11 +81,10 @@ DEBUG_FORCE_PATCH_NOTES = False
 
 # ------------------------------------------------------------------------------------ #
 
-logger.info("Starting %s...", STRINGS.APP_NAME)
-logger.info("App version: %s", APP_VERSION)
+logger.info("Starting %s %s...", STRINGS.APP_NAME, APP_VERSION)
 logger.info("Developer mode: %s", DEBUG_MODE)
-logger.info("Assumed game folder: %s", GAME_DIR or "???")
-logger.info("Assumed clusters folder: %s", CLUSTER_INITIAL_DIR or "???")
+logger.info("Detected game folder: %s", GAME_DIR or "not found")
+logger.info("Detected clusters folder: %s", CLUSTER_INITIAL_DIR or "not found")
 
 # ------------------------------------------------------------------------------------ #
 
@@ -347,11 +346,13 @@ class App(CTk):
                 remote_version = Path(response.url).name
 
                 if response.status_code == 200 and remote_version != APP_VERSION[1:]:
+                    logger.info("A new version is available: v%s (running %s).", remote_version, APP_VERSION)
+
                     self.after(300, self.update_popup.create, STRINGS.UPDATE_POPUP.DESCRIPTION.DEFAULT)
 
             except requests.exceptions.RequestException as e:
                 # No internet connection, timeout or HTTP error: skip the update check silently.
-                logger.debug(f"Update check skipped (network error): {e}")
+                logger.debug(f"Update check skipped, the latest release could not be reached: {e}")
 
         threading.Thread(target=_check, daemon=True).start()
 
@@ -367,6 +368,8 @@ class App(CTk):
         self.token_entry.toggle_warning(reason is None, reason)
 
         if reason:
+            logger.warning(f"Launch cancelled, the token is not usable: {reason}.")
+
             self.error_popup.create(reason == INVALID.EMPTY and STRINGS.ERROR.TOKEN_EMPTY or STRINGS.ERROR.TOKEN_INVALID)
 
             return # Don't start the server without a usable token.
@@ -396,21 +399,27 @@ class App(CTk):
 
 
     def save_entries_data(self):
-        logger.debug("Entries data has been saved.")
-
         self.entries_save_loader.save(
             token       =  self.token_entry.get(),
             game_dir    = self.game_entry.get(),
             cluster_dir = self.cluster_entry.get(),
         )
 
-    def load_saved_entries(self):
-        logger.info("Entries data has been imported.")
+        logger.debug("Saved the game folder, cluster folder and token to disk.")
 
+    def load_saved_entries(self):
         data = self.entries_save_loader.load()
 
         if not data:
+            logger.info("No saved entries found, starting with empty fields.")
             return
+
+        logger.info(
+            "Loaded entries: Game Folder = '%s', Cluster Folder = '%s', Token = %s.",
+            data.game_dir or "empty",
+            data.cluster_dir or "empty",
+            data.token and "<hidden>" or "empty",
+        )
 
         self.token_entry.set_text(data.token, load=True)
         self.game_entry.set_text(data.game_dir, load=True)
@@ -430,10 +439,14 @@ class App(CTk):
             if not confirmed:
                 return
 
+            logger.info("Closing the application, waiting for the shards to save and shut down.")
+
             self.stop_shards()
             self._close_when_shards_stop()
 
             return
+
+        logger.info("Closing the application.")
 
         self.destroy()
 
@@ -447,7 +460,7 @@ class App(CTk):
 
         if not still_running or waited >= SHUTDOWN_TIMEOUT:
             if still_running:
-                logger.warning("Shards did not shut down in time, closing anyway.")
+                logger.warning("The shards did not shut down within %ds, closing anyway.", SHUTDOWN_TIMEOUT // 1000)
 
             self.destroy()
 
@@ -462,13 +475,13 @@ class App(CTk):
         try:
             # Restart the process and exit the current instance.
             subprocess.Popen([sys.executable] + sys.argv, close_fds=True)
-        except OSError:
-            logger.error("Failed to restart via sys.executable, trying sys.argv[0].")
+        except OSError as e:
+            logger.warning(f"Failed to restart through '{sys.executable}' ({e}), trying '{sys.argv[0]}'.")
 
             try:
                 subprocess.Popen(sys.argv, close_fds=True)
-            except OSError:
-                logger.error("Failed to restart the application.")
+            except OSError as e:
+                logger.error(f"Failed to restart the application: {e}. Please start it again manually.")
                 return
 
         self.destroy() # Close the windows before exiting program.
@@ -478,7 +491,7 @@ class App(CTk):
         err: list = traceback.format_exception(exctype, excvalue, tb)
         error = " ".join(err)
 
-        logger.error(error)
+        logger.error("Unhandled exception, stopping the shards:\n%s", error)
 
         summary = f'{exctype.__name__}: {excvalue}.'
 
@@ -494,7 +507,11 @@ if __name__ == "__main__":
 
     app = App()
 
-    STRINGS.load_strings(app.settings.get(Settings.LANGUAGE))
+    language = app.settings.get(Settings.LANGUAGE)
+
+    logger.info("Language: %s", language)
+
+    STRINGS.load_strings(language)
     FONT.create_fonts() # Needs to run after string loading.
 
     # ------------------------------------------------------------------------------------ #

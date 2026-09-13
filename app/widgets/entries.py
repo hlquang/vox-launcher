@@ -134,7 +134,7 @@ class CustomEntry(CTkFrame):
         return button
 
     def get(self):
-        return self.entry.get()
+        return self.entrytext.get()
 
     def is_editing(self):
         return self.entry._entry.focus_get() is self.entry._entry
@@ -152,7 +152,7 @@ class CustomEntry(CTkFrame):
 
         # Live validation fires per keystroke, so only log when the verdict changes.
         if not valid and state != self._warning_state:
-            logger.info(f"Invalid input at entry {self.tooltip.cget('text')}: {reason or 'unspecified'}.")
+            logger.info(f"The '{self.tooltip.cget('text')}' field holds an invalid value: {reason or 'unspecified'}.")
 
         self._warning_state = state
         self.valid = valid

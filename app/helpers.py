@@ -141,7 +141,7 @@ class SaveLoader:
             )
 
         except OSError as e:
-            logger.error(f"Failed to write save file '{self.file.name}': {e}")
+            logger.error(f"Failed to write the save file '{self.file.name}': {e}")
 
     def load(self):
         """
@@ -158,11 +158,11 @@ class SaveLoader:
             return
 
         except (OSError, json.JSONDecodeError) as e:
-            logger.error(f"Failed to read save file '{self.file.name}': {e}")
+            logger.error(f"Failed to read the save file '{self.file.name}', its contents will be ignored: {e}")
             return
 
         if not isinstance(data, dict):
-            logger.error(f"Save file '{self.file.name}' does not hold an object.")
+            logger.error(f"The save file '{self.file.name}' is malformed, its contents will be ignored.")
             return
 
         return DotDict(data)
@@ -237,7 +237,7 @@ def read_vox_data(server, text):
     try:
         return json.loads(string)
     except json.JSONDecodeError as e:
-        logger.warning(f"Failed to parse Vox Launcher data: {e}")
+        logger.warning(f"Failed to parse Vox Launcher data from the server: {e}")
         return None
 
 # ----------------------------------------------------------------------------------------- #
@@ -325,11 +325,11 @@ def validate_game_directory(directory) -> bool:
     directory = Path(directory)
 
     if not directory.exists():
-        logger.debug(f"Validate Game Directory: directory '{directory}' doesn't exist...")
+        logger.debug(f"Invalid game directory: '{directory}' doesn't exist.")
         return False
 
     if not any((directory / child).exists() for child in GAME_DIRECTORY_ONE_OF_CHILDREN):
-        logger.debug(f"Validate Game Directory: missing one of these {GAME_DIRECTORY_ONE_OF_CHILDREN} in '{directory}'...")
+        logger.debug(f"Invalid game directory: '{directory}' holds none of {GAME_DIRECTORY_ONE_OF_CHILDREN}.")
         return False
 
     return True
@@ -536,7 +536,7 @@ def load_lua_file(filename, **kwargs):
 
         return text
     else:
-        logger.error("load_lua_file: File [%s] doesn't exist...", str(file))
+        logger.error(f"Failed to load the lua file '{file}': it doesn't exist.")
 
         return None
 
@@ -598,7 +598,7 @@ def get_shard_names(cluster):
         entries = list(cluster.iterdir())
 
     except OSError as e:
-        logger.warning(f"Failed to list shards in '{cluster}': {e}")
+        logger.warning(f"Failed to list the shards in '{cluster}': {e}")
         return shards
 
     for directory in entries:
@@ -667,13 +667,13 @@ def get_ugc_directory(game_directory):
     steamapps = Path(game_directory).resolve().parent.parent
 
     if steamapps.name.lower() != "steamapps":
-        logger.debug(f"get_ugc_directory: '{game_directory}' isn't inside a Steam library.")
+        logger.debug(f"No workshop directory: '{game_directory}' isn't inside a Steam library.")
         return None
 
     workshop = steamapps / "workshop"
 
     if not (workshop / "content" / STEAM_APP_ID).is_dir():
-        logger.debug(f"get_ugc_directory: no subscribed mods found in '{workshop}'.")
+        logger.debug(f"No workshop directory: no subscribed mods found in '{workshop}'.")
         return None
 
     return str(workshop)
@@ -698,9 +698,28 @@ def split_launch_options(text):
         return list(lexer)
 
     except ValueError as e:
-        logger.warning(f"Failed to parse launch options ({e}), falling back to a whitespace split.")
+        logger.warning(f"Failed to parse the custom launch options ({e}), falling back to a whitespace split.")
 
         return (text or "").split()
+
+def redact_token(args):
+    """
+    Hides the value of every -token argument, so the command line can be logged.
+
+    Args:
+        args (list): the server arguments.
+
+    Returns:
+        list: the arguments, with the token values replaced.
+    """
+
+    redacted = list(args)
+
+    for index, arg in enumerate(redacted[:-1]):
+        if arg == "-token":
+            redacted[index + 1] = "<hidden>"
+
+    return redacted
 
 # ----------------------------------------------------------------------------------------- #
 
@@ -731,7 +750,7 @@ def get_game_directory():
                 return Path(game_path)
 
     except OSError as e:
-        logger.debug(f"Failed to get the Game directory using [...]\\Steam App 322330 - InstallLocation: {e}")
+        logger.debug(f"Failed to read the game directory from the registry key 'Steam App 322330\\InstallLocation': {e}")
 
     try:
         # Open the Steam registry key.
@@ -745,7 +764,7 @@ def get_game_directory():
                 return directory
 
     except OSError as e:
-        logger.debug(f"Failed to get the Game directory using Software\\Valve\\Steam - SteamPath: {e}")
+        logger.debug(f"Failed to read the game directory from the registry key 'Software\\Valve\\Steam\\SteamPath': {e}")
 
     return None
 
@@ -834,7 +853,7 @@ def retrieve_launch_data(cluster_dir, save_loader):
         siblings = list(cluster_path.parent.iterdir())
 
     except OSError as e:
-        logger.warning(f"Failed to list clusters next to '{cluster_path}': {e}")
+        logger.warning(f"Failed to list the clusters next to '{cluster_path}': {e}")
         return None
 
     for sibling_cluster in siblings:
@@ -875,6 +894,8 @@ def _check_log_file(cluster_path, save_loader):
         save_loader.save(
             ugc_directory=_find_command_line_argument(text, "ugc_directory"),
         )
+
+        logger.info(f"Recovered the launch data from '{log_path}'.")
 
         return save_loader.load()
 
@@ -939,7 +960,7 @@ def read_file_nonblocking(file: Path, callback):
                 content = file.read_text(encoding="utf-8", errors="backslashreplace")
 
             except Exception as e:
-                logger.warning(f"Failed to read file {file}: {e}")
+                logger.warning(f"Failed to read '{file}': {e}")
                 content = ""
         else:
             content = ""
