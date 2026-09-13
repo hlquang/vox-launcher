@@ -126,18 +126,22 @@ class SaveLoader:
     def save(self, /, **kwargs):
         """ Saves kwargs to self.file. """
 
-        self.file.parent.mkdir(exist_ok=True, parents=True)
+        try:
+            self.file.parent.mkdir(exist_ok=True, parents=True)
 
-        self.file.write_text(
-            json.dumps(
-                kwargs,
-                sort_keys = True,
-                indent = 4,
-                ensure_ascii = False
-            ),
-            encoding="utf-8",
-            errors="backslashreplace"
-        )
+            self.file.write_text(
+                json.dumps(
+                    kwargs,
+                    sort_keys = True,
+                    indent = 4,
+                    ensure_ascii = False
+                ),
+                encoding="utf-8",
+                errors="backslashreplace"
+            )
+
+        except OSError as e:
+            logger.error(f"Failed to write save file '{self.file.name}': {e}")
 
     def load(self):
         """
@@ -147,13 +151,18 @@ class SaveLoader:
             None if the file doesn't exists, otherwise a DotDict instance containing the data loaded.
         """
 
-        if not self.file.exists():
-            return
-
         try:
             data = json.loads(self.file.read_text(encoding="utf-8", errors="backslashreplace"))
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse save file '{self.file.name}': {e}")
+
+        except FileNotFoundError:
+            return
+
+        except (OSError, json.JSONDecodeError) as e:
+            logger.error(f"Failed to read save file '{self.file.name}': {e}")
+            return
+
+        if not isinstance(data, dict):
+            logger.error(f"Save file '{self.file.name}' does not hold an object.")
             return
 
         return DotDict(data)
@@ -245,13 +254,22 @@ def get_key_from_ini_file(file, key):
         value (str, None): the key's value or None.
     """
 
-    pattern = re.compile(rf'{key}\s*=\s*(.+)')
+    try:
+        text = file.read_text(encoding="utf-8", errors="backslashreplace")
 
-    text  = file.read_text(encoding="utf-8", errors="backslashreplace")
+    except FileNotFoundError:
+        return None
+
+    except OSError as e:
+        logger.warning(f"Failed to read '{file}': {e}")
+        return None
+
+    # Anchored, so commented out lines ('#key = value') and keys merely ending in 'key' are skipped.
+    pattern = re.compile(rf'^[ \t]*{re.escape(key)}[ \t]*=(.*)$', re.MULTILINE)
+
     match = pattern.search(text)
 
-    if match:
-        return match.group(1).strip()
+    return match.group(1).strip() if match else None
 
 DEFAULT_MAX_SNAPSHOTS = 6
 
@@ -266,12 +284,13 @@ def _get_max_rollbacks(cluster_settings):
         value (int): cluster_settings's max_snapshots or DEFAULT_MAX_SNAPSHOTS.
     """
 
-    if cluster_settings.exists():
-        max_snapshots = get_key_from_ini_file(cluster_settings, "max_snapshots")
+    max_snapshots = get_key_from_ini_file(cluster_settings, "max_snapshots")
 
-        return int(max_snapshots or DEFAULT_MAX_SNAPSHOTS)
+    try:
+        return max(1, int(max_snapshots))
 
-    return DEFAULT_MAX_SNAPSHOTS
+    except (TypeError, ValueError):
+        return DEFAULT_MAX_SNAPSHOTS
 
 def rollback_slider_fn(app):
     """
@@ -317,7 +336,7 @@ def validate_game_directory(directory) -> bool:
 
 # ----------------------------------------------------------------------------------------- #
 
-TOKEN_PATTERN = r"^pds-g\^KU.+?\^.+?"
+TOKEN_PATTERN = r"^pds-g\^KU.+\^.+"
 
 def is_valid_token(token: str) -> bool:
     """
@@ -381,7 +400,7 @@ def get_cluster_directory_error(directory: str):
     if not (path / "Master").exists():
         return INVALID.NO_MASTER
 
-    if not path.parent.name.isdigit():
+    if not is_config_directory(get_cluster_launch_paths(path)["conf_dir"]):
         return INVALID.WRONG_LOCATION
 
     return None
@@ -402,10 +421,11 @@ def get_token_error(token: str):
 def get_app_logs():
     file = resource_path("logs/applog.txt")
 
-    if not file.exists():
-        return "No logs available."
+    try:
+        return file.read_text(encoding="utf-8", errors="backslashreplace")
 
-    return file.read_text(encoding="utf-8", errors="backslashreplace")
+    except OSError:
+        return "No logs available."
 
 # ----------------------------------------------------------------------------------------- #
 
@@ -431,13 +451,21 @@ def open_github_issue(template="bug_report", traceback=None, include_applog=Fals
 
     MAX_URL_LENGTH = 8000
 
-    traceback = traceback and f"&traceback={encode_for_url(traceback)}" or ""
-    applogs = include_applog and f"&applogs={encode_for_url(get_app_logs())}" or ""
+    url = f"https://github.com/diogo-webber/vox-launcher/issues/new?template={template}.yml"
 
-    url = f"https://github.com/diogo-webber/vox-launcher/issues/new?template={template}.yml{traceback}{applogs}"
+    for name, value in (("traceback", traceback), ("applogs", include_applog and get_app_logs() or None)):
+        if not value:
+            continue
 
-    if len(url) > MAX_URL_LENGTH:
-        url = url[:MAX_URL_LENGTH]
+        # Trim the payload itself, so truncating can't cut a percent escape in half.
+        while value:
+            field = f"&{name}={encode_for_url(value)}"
+
+            if len(url) + len(field) <= MAX_URL_LENGTH:
+                url += field
+                break
+
+            value = value[len(value) // 2:]
 
     webbrowser.open(url, new=0, autoraise=True)
 
@@ -549,9 +577,7 @@ def loadfont(fontpath, private = True, enumerable = False):
 
 # ----------------------------------------------------------------------------------------- #
 
-def sort_key(shardname):
-    """Master first, then Caves and then the others"""
-    return dict(Master = 0, Caves = 1).get(shardname, 3)
+SHARD_ORDER = { "Master": 0, "Caves": 1 }
 
 def get_shard_names(cluster):
     """
@@ -567,13 +593,28 @@ def get_shard_names(cluster):
     cluster = Path(cluster)
     shards = []
 
-    for directory in cluster.iterdir():
+    try:
+        entries = list(cluster.iterdir())
+
+    except OSError as e:
+        logger.warning(f"Failed to list shards in '{cluster}': {e}")
+        return shards
+
+    for directory in entries:
         if directory.is_dir() and (directory / "server.ini").exists():
             shards.append(directory.name)
 
-    return sorted(shards, key=sort_key)
+    # Master first, then Caves, then the rest alphabetically.
+    return sorted(shards, key=lambda name: (SHARD_ORDER.get(name, 2), name.lower()))
 
 # ----------------------------------------------------------------------------------------- #
+
+CONFIG_DIRECTORY_NAMES = ( "DoNotStarveTogether", "DoNotStarveTogetherBetaBranch" )
+
+def is_config_directory(name):
+    """ Whether name is the folder the game keeps its clusters in. """
+
+    return bool(name) and name.lower().startswith("donotstarvetogether")
 
 def get_cluster_launch_paths(path):
     """
@@ -657,8 +698,8 @@ def get_game_directory():
             if validate_game_directory(game_path):
                 return Path(game_path)
 
-    except FileNotFoundError:
-        logger.debug("FileNotFoundError exception when trying to get the Game directory using: [...]\\Steam App 322330 - InstallLocation.")
+    except OSError as e:
+        logger.debug(f"Failed to get the Game directory using [...]\\Steam App 322330 - InstallLocation: {e}")
 
     try:
         # Open the Steam registry key.
@@ -671,8 +712,10 @@ def get_game_directory():
             if validate_game_directory(directory):
                 return directory
 
-    except FileNotFoundError:
-        logger.debug("FileNotFoundError exception when trying to get the Game directory using: Software\\Valve\\Steam - SteamPath.")
+    except OSError as e:
+        logger.debug(f"Failed to get the Game directory using Software\\Valve\\Steam - SteamPath: {e}")
+
+    return None
 
 CSIDL_PERSONAL = 5       # Documents
 SHGFP_TYPE_CURRENT = 0   # Get current, not default value
@@ -686,9 +729,13 @@ def _get_documents_folder():
     """
 
     buf = ctypes.create_unicode_buffer(ctypes.wintypes.MAX_PATH)
-    ctypes.windll.shell32.SHGetFolderPathW(None, CSIDL_PERSONAL, None, SHGFP_TYPE_CURRENT, buf)
+    result = ctypes.windll.shell32.SHGetFolderPathW(None, CSIDL_PERSONAL, None, SHGFP_TYPE_CURRENT, buf)
 
-    return buf.value
+    if result != 0 or not buf.value:
+        logger.debug(f"SHGetFolderPathW failed to resolve the Documents folder (0x{result & 0xFFFFFFFF:08X}).")
+        return None
+
+    return Path(buf.value)
 
 def get_clusters_directory():
     """
@@ -698,23 +745,30 @@ def get_clusters_directory():
         directory (Path, None): the directory path or None.
     """
 
-    dst_directory = Path(_get_documents_folder()) / "Klei/DoNotStarveTogether"
+    documents = _get_documents_folder()
 
-    if not dst_directory.exists():
+    if documents is None:
         return None
 
-    if (dst_directory / "client.ini").exists():
-        return dst_directory
+    for config_directory in CONFIG_DIRECTORY_NAMES:
+        dst_directory = documents / "Klei" / config_directory
 
-    # Some users have their clusters inside a numeric folder.
-    for directory in dst_directory.iterdir():
-        if directory.is_dir() and directory.name.isdigit() and (directory / "client.ini").exists():
-            return directory
+        if not dst_directory.exists():
+            continue
+
+        if (dst_directory / "client.ini").exists():
+            return dst_directory
+
+        # Some users have their clusters inside a numeric folder.
+        for directory in dst_directory.iterdir():
+            if directory.is_dir() and directory.name.isdigit() and (directory / "client.ini").exists():
+                return directory
 
     return None
 
 def _find_command_line_argument(text, arg):
-    pattern = re.compile(rf'-{arg}\s+(.+?)(?=\s-|\s*$)', re.MULTILINE) # -arg value (-next | end)
+    # The game logs every argument on a single line, so the value ends at the next ' -flag'.
+    pattern = re.compile(rf'(?:^|\s)-{re.escape(arg)}\s+(.+?)(?=\s-|\s*$)', re.MULTILINE)
 
     match = pattern.search(text)
 
@@ -744,7 +798,14 @@ def retrieve_launch_data(cluster_dir, save_loader):
         return data
 
     # Then, check sibling clusters in parent folder.
-    for sibling_cluster in cluster_path.parent.iterdir():
+    try:
+        siblings = list(cluster_path.parent.iterdir())
+
+    except OSError as e:
+        logger.warning(f"Failed to list clusters next to '{cluster_path}': {e}")
+        return None
+
+    for sibling_cluster in siblings:
         if sibling_cluster.is_dir() and sibling_cluster != cluster_path:
             data = _check_log_file(sibling_cluster, save_loader)
 
@@ -753,6 +814,8 @@ def retrieve_launch_data(cluster_dir, save_loader):
 
     return None
 
+# The command line is logged in the first few lines; server logs themselves can reach hundreds of MB.
+LOG_HEADER_SIZE = 64 * 1024
 
 def _check_log_file(cluster_path, save_loader):
     """
@@ -768,10 +831,12 @@ def _check_log_file(cluster_path, save_loader):
 
     log_path = cluster_path / "Master/server_log.txt"
 
-    if not log_path.exists():
-        return None
+    try:
+        with log_path.open(encoding="utf-8", errors="backslashreplace") as file:
+            text = file.read(LOG_HEADER_SIZE)
 
-    text = log_path.read_text(encoding="utf-8", errors="backslashreplace")
+    except OSError:
+        return None
 
     if _find_command_line_argument(text, "backup_log_count"):
         # If backup_log_count exists, it's likely that this cluster was launched outside of Vox.
@@ -858,12 +923,7 @@ _INVALID_UNICODE_RANGES = [
     (57600,   57606),  # Mouse
 ]
 
-regex_range = ""
-
-for start, end in _INVALID_UNICODE_RANGES:
-    regex_range += f"{chr(start)}-{chr(end)}"
-
-_CUSTOM_UNICODE_PATTERN = re.compile(f"[{regex_range}]")
+_CUSTOM_UNICODE_PATTERN = re.compile("[" + "".join(f"{chr(start)}-{chr(end)}" for start, end in _INVALID_UNICODE_RANGES) + "]")
 
 def get_sanitized_cluster_name(config_file):
     cluster_name = get_key_from_ini_file(config_file, "cluster_name") or ""
@@ -875,310 +935,3 @@ def get_sanitized_cluster_name(config_file):
     cleaned = re.sub(r'\s+', " ", cleaned).strip()
 
     return cleaned
-
-# ------------------------------------------------------------------------------------------ #
-# Workshop mods discovery and modoverrides.lua editing.
-# ------------------------------------------------------------------------------------------ #
-
-_MODINFO_NAME_PATTERN = re.compile(r'^\s*name\s*=\s*(["\'])(.*?)\1', re.MULTILINE)
-_MODOVERRIDES_ENTRY_PATTERN = re.compile(r'\[\s*"([^"]+)"\s*\]\s*=\s*\{')
-
-def _parse_modinfo_name(modinfo_file):
-    """Reads a mod's modinfo.lua and returns its 'name' field, or None."""
-
-    try:
-        text = modinfo_file.read_text(encoding="utf-8", errors="backslashreplace")
-    except OSError as e:
-        logger.warning(f"Failed to read modinfo '{modinfo_file}': {e}")
-        return None
-
-    match = _MODINFO_NAME_PATTERN.search(text)
-
-    return match and match.group(2).strip() or None
-
-def get_workshop_mods(ugc_directory):
-    """
-    Discovers Steam Workshop mods downloaded under the ugc_directory.
-
-    Each mod lives in a numeric folder (its Workshop id) containing a modinfo.lua.
-
-    Args:
-        ugc_directory (str, Path, None): the -ugc_directory path used by the server.
-
-    Returns:
-        dict: { "workshop-<id>": <mod name> } sorted by mod name.
-    """
-
-    mods = {}
-
-    if not ugc_directory:
-        return mods
-
-    ugc = Path(ugc_directory)
-
-    if not ugc.exists():
-        logger.debug(f"get_workshop_mods: ugc_directory '{ugc}' doesn't exist...")
-        return mods
-
-    for modinfo_file in ugc.rglob("modinfo.lua"):
-        mod_id = modinfo_file.parent.name
-
-        if not mod_id.isdigit():
-            continue
-
-        name = _parse_modinfo_name(modinfo_file) or mod_id
-
-        mods[f"workshop-{mod_id}"] = name
-
-    return dict(sorted(mods.items(), key=lambda item: item[1].lower()))
-
-def _find_matching_brace(text, open_index):
-    """Returns the index of the '}' matching the '{' at open_index, ignoring braces inside strings."""
-
-    depth = 0
-    in_string = None
-    i = open_index
-
-    while i < len(text):
-        char = text[i]
-
-        if in_string:
-            if char == in_string and text[i - 1] != "\\":
-                in_string = None
-
-        elif char in ("\"", "'"):
-            in_string = char
-
-        elif char == "{":
-            depth += 1
-
-        elif char == "}":
-            depth -= 1
-
-            if depth == 0:
-                return i
-
-        i += 1
-
-    return -1
-
-def _compute_depths(text):
-    """Returns a list where depths[i] is the brace nesting depth just before text[i]."""
-
-    depths = [0] * (len(text) + 1)
-    depth = 0
-    in_string = None
-
-    for i, char in enumerate(text):
-        depths[i] = depth
-
-        if in_string:
-            if char == in_string and text[i - 1] != "\\":
-                in_string = None
-
-        elif char in ("\"", "'"):
-            in_string = char
-
-        elif char == "{":
-            depth += 1
-
-        elif char == "}":
-            depth -= 1
-
-    depths[len(text)] = depth
-
-    return depths
-
-def _is_block_enabled(block):
-    """Returns True if a mod entry block contains 'enabled=true'."""
-
-    match = re.search(r'enabled\s*=\s*(true|false)', block)
-
-    return bool(match) and match.group(1) == "true"
-
-def _set_block_enabled(block, enabled):
-    """Returns the entry block with its 'enabled' flag set, preserving everything else (e.g. configuration_options)."""
-
-    value = enabled and "true" or "false"
-
-    new_block, count = re.subn(r'enabled\s*=\s*(?:true|false)', f"enabled={value}", block, count=1)
-
-    if count == 0:
-        # No 'enabled' key present: inject one right after the opening brace.
-        new_block = re.sub(r'\{', f"{{ enabled={value},", block, count=1)
-
-    return new_block
-
-def parse_modoverrides(text):
-    """
-    Parses a modoverrides.lua content into its top-level mod entries.
-
-    Args:
-        text (str): the modoverrides.lua file content.
-
-    Returns:
-        dict: { key: { "enabled": bool, "block": str } } preserving original order.
-              "block" is the raw '{...}' Lua text of the entry.
-    """
-
-    entries = {}
-
-    outer_open = text.find("{")
-
-    if outer_open == -1:
-        return entries
-
-    outer_close = _find_matching_brace(text, outer_open)
-
-    if outer_close == -1:
-        return entries
-
-    inner = text[outer_open + 1:outer_close]
-    depths = _compute_depths(inner)
-
-    for match in _MODOVERRIDES_ENTRY_PATTERN.finditer(inner):
-        if depths[match.start()] != 0:
-            continue  # Nested key (e.g. inside configuration_options), skip.
-
-        key = match.group(1)
-        brace_open = match.end() - 1
-        brace_close = _find_matching_brace(inner, brace_open)
-
-        if brace_close == -1:
-            continue
-
-        block = inner[brace_open:brace_close + 1]
-
-        entries[key] = { "enabled": _is_block_enabled(block), "block": block }
-
-    return entries
-
-def _serialize_modoverrides(order, entries):
-    """Rebuilds a modoverrides.lua content from parsed entries."""
-
-    lines = ["return {"]
-
-    for key in order:
-        block = entries[key]["block"].strip()
-        lines.append(f'  ["{key}"]={block},')
-
-    lines.append("}")
-    lines.append("")
-
-    return "\n".join(lines)
-
-def read_cluster_mod_states(cluster_dir):
-    """
-    Reads the enabled state of mods from the cluster, using the first shard that has a modoverrides.lua.
-
-    Args:
-        cluster_dir (str, Path): the cluster path.
-
-    Returns:
-        dict: { key: bool } mapping each mod key to its enabled state.
-    """
-
-    cluster = Path(cluster_dir)
-    states = {}
-
-    if not cluster.exists():
-        return states
-
-    for shard in get_shard_names(cluster):
-        modoverrides = cluster / shard / "modoverrides.lua"
-
-        if not modoverrides.exists():
-            continue
-
-        try:
-            text = modoverrides.read_text(encoding="utf-8", errors="backslashreplace")
-        except OSError as e:
-            logger.warning(f"Failed to read '{modoverrides}': {e}")
-            continue
-
-        for key, data in parse_modoverrides(text).items():
-            states[key] = data["enabled"]
-
-        break  # Master/first shard is enough; all shards are kept in sync.
-
-    return states
-
-def write_cluster_mod_states(cluster_dir, enabled_map):
-    """
-    Applies the given mod enabled states to every shard's modoverrides.lua in the cluster.
-
-    Existing entries (including their configuration_options) are preserved; only the
-    'enabled' flag is updated. Mods not yet present are added when enabled.
-
-    Args:
-        cluster_dir (str, Path): the cluster path.
-        enabled_map (dict): { key: bool } mapping each mod key to its desired enabled state.
-
-    Returns:
-        bool: True if at least one shard file was written.
-    """
-
-    cluster = Path(cluster_dir)
-    wrote_any = False
-
-    for shard in get_shard_names(cluster):
-        shard_dir = cluster / shard
-
-        if not shard_dir.is_dir():
-            continue
-
-        modoverrides = shard_dir / "modoverrides.lua"
-
-        if modoverrides.exists():
-            try:
-                text = modoverrides.read_text(encoding="utf-8", errors="backslashreplace")
-            except OSError as e:
-                logger.warning(f"Failed to read '{modoverrides}': {e}")
-                continue
-        else:
-            text = "return {\n}"
-
-        entries = parse_modoverrides(text)
-        order = list(entries.keys())
-
-        for key, enabled in enabled_map.items():
-            if key in entries:
-                entries[key]["block"] = _set_block_enabled(entries[key]["block"], enabled)
-
-            elif enabled:
-                entries[key] = { "enabled": True, "block": "{ enabled=true }" }
-                order.append(key)
-
-        try:
-            modoverrides.write_text(_serialize_modoverrides(order, entries), encoding="utf-8", errors="backslashreplace")
-            wrote_any = True
-        except OSError as e:
-            logger.error(f"Failed to write '{modoverrides}': {e}")
-
-    return wrote_any
-
-def get_ugc_directory(app):
-    """
-    Determines the server's ugc (Workshop) directory from saved launch data.
-
-    Args:
-        app (CTk): the app instance.
-
-    Returns:
-        str | None: the ugc_directory path or None.
-    """
-
-    data = app.launch_data_save_loader.load()
-
-    if data and data["ugc_directory"]:
-        return data["ugc_directory"]
-
-    cluster_dir = app.cluster_entry.get()
-
-    if cluster_dir:
-        data = retrieve_launch_data(cluster_dir, app.launch_data_save_loader)
-
-        if data and data["ugc_directory"]:
-            return data["ugc_directory"]
-
-    return None
