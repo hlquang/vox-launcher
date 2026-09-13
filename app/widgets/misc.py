@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from customtkinter import CTkImage, CTkLabel, CTkToplevel, CTkButton, CTkSlider
-from tkinter import StringVar, IntVar, Toplevel, filedialog, DISABLED, NORMAL
+from tkinter import StringVar, IntVar, Toplevel, filedialog, DISABLED, NORMAL, TclError
 from PIL import Image
 import requests, os
 
@@ -80,7 +80,7 @@ class ClusterStats:
     def hide(self):
         self._frame.place_forget()
 
-TOOLTIP_PADDING = 11
+TOOLTIP_PADDING = 7
 TOOLTIP_GAP = 8
 TOOLTIP_LINE_GAP = 6
 TOOLTIP_WINDOW_MARGIN = 14
@@ -138,8 +138,15 @@ class Tooltip:
         if not text:
             self.hide_tooltip()
 
+    def _is_disabled(self):
+        try:
+            return str(self.widget.cget("state")) == DISABLED
+
+        except (TclError, ValueError):
+            return False # Widget has no state, so it can't be disabled.
+
     def show_tooltip_with_delay(self, event=None):
-        if not self.text:
+        if not self.text or self._is_disabled():
             return
 
         if self.taskid:
@@ -160,10 +167,10 @@ class Tooltip:
             master=self.tooltip,
             color=COLOR.GRAY,
             size=Size(0, 0),
-            corner_radius=10,
+            corner_radius=8,
             bg_color=TOOLTIP_TRANSPARENT_COLOR,
             border_color=COLOR.GRAY_HOVER,
-            border_width=3,
+            border_width=2,
         )
 
         padding = self.tooltip_frame._apply_widget_scaling(TOOLTIP_PADDING)
@@ -180,7 +187,7 @@ class Tooltip:
                 text=line,
                 fg_color="transparent",
                 text_color=COLOR.WHITE,
-                font=FONT.ENTRY,
+                font=FONT.TOOLTIP_SMALL,
                 wraplength=330,
             )
 

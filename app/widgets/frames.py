@@ -870,6 +870,10 @@ class ShardFrame(CustomFrame):
 
         self.logs.show()
 
+        from widgets.misc import Tooltip # Imported here: widgets.misc imports this module.
+
+        Tooltip(widget=self.logs, text=STRINGS.BUTTON_TOOLTIP.SHARD_LOGS, above=True)
+
         self.status_circle = ColouredCircle(
             master=self,
             color=COLOR.WHITE,

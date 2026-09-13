@@ -301,6 +301,8 @@ class App(CTk):
 
         self.settings_button.show()
 
+        Tooltip(widget=self.settings_button, text=STRINGS.BUTTON_TOOLTIP.SETTINGS, above=True)
+
         self.protocol("WM_DELETE_WINDOW", self.on_close)
 
         # ---------------------------------------------------------------------- #

@@ -34,6 +34,7 @@ class FONT_SIZE:
     SETTING_DESC = 13
     SETTING_LONG_BUTTON = 13
     SEARCH_RESULTS = 12
+    TOOLTIP_SMALL = 11
 
 # ------------------------------------------------------------------------------------ #
 

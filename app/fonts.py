@@ -42,6 +42,7 @@ class Fonts:
         self.SETTING_DESC  = CustomFont(FONT_SIZE.SETTING_DESC,  bold=False)
         self.SETTING_LONG_BUTTON = CustomFont(FONT_SIZE.SETTING_LONG_BUTTON)
         self.SEARCH_RESULTS      = CustomFont(FONT_SIZE.SEARCH_RESULTS     )
+        self.TOOLTIP_SMALL       = CustomFont(FONT_SIZE.TOOLTIP_SMALL,  bold=False)
 
 
 FONT = Fonts()

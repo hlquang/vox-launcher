@@ -197,6 +197,8 @@ class DirectoryEntry(CustomEntry):
 
         self.button = self._add_icon_button("assets/directory.png", self.open_directory_dialog)
 
+        Tooltip(widget=self.button, text=STRINGS.BUTTON_TOOLTIP.BROWSE_FOLDER, above=True)
+
         self.entry.bind("<FocusOut>", self.on_text_changed)
 
     def validate_text(self):
@@ -282,6 +284,8 @@ class TokenEntry(CustomEntry):
         )
 
         self.button = self._add_icon_button("assets/eye.png", self.toggle_text_visibility)
+
+        Tooltip(widget=self.button, text=STRINGS.BUTTON_TOOLTIP.TOGGLE_VISIBILITY, above=True)
 
         self.entrytext.trace_add("write", lambda *args: self.validate_text())
         self.entry.bind("<FocusOut>", self.on_text_changed)

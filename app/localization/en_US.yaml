@@ -110,6 +110,13 @@ SMALL_BUTTON:
     RESET: Restart
     ROLLBACK: Rollback
 
+# Shown on hover, over buttons that have an icon but no label. Keep these short.
+BUTTON_TOOLTIP:
+    SETTINGS: Settings
+    SHARD_LOGS: Open Console
+    BROWSE_FOLDER: Browse Folder
+    TOGGLE_VISIBILITY: Show / Hide
+
 COMMAND_CONFIRMATION:
     QUIT: Are you sure you want to stop the server without saving? Unsaved data will be lost!
     RESET: Are you sure you want to restart the server without saving? Unsaved data will be lost!
