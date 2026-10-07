@@ -513,7 +513,7 @@ class ShardLogPanel():
 
             self.reset_text()
 
-            logger.debug(f"Loading log file for {self.shard}.")
+            logger.debug(f"({self.shard}) Reading the log file from the last session.")
 
 
     def on_escape(self, *args, **kwargs):
@@ -628,7 +628,7 @@ class ShardLogPanel():
         self._append_index = 0
 
         if len(self._append_lines) > MAX_LINES:
-            logger.info(f"Truncating log file for shard '{self.shard}' because it exceeds the maximum allowed {MAX_LINES} lines.")
+            logger.info(f"({self.shard}) The log file is longer than {MAX_LINES} lines, only the last ones will be shown.")
 
             truncation_message = (
                 f">> This log has been truncated to the last {MAX_LINES} lines.\n\n"
@@ -658,7 +658,7 @@ class ShardLogPanel():
 
             self.textbox.configure(state=DISABLED)
 
-            logger.debug(f"Loaded log file for {self.shard}.")
+            logger.debug(f"({self.shard}) Finished loading the log file.")
 
             return
 
@@ -869,6 +869,10 @@ class ShardFrame(CustomFrame):
         )
 
         self.logs.show()
+
+        from widgets.misc import Tooltip # Imported here: widgets.misc imports this module.
+
+        Tooltip(widget=self.logs, text=STRINGS.BUTTON_TOOLTIP.SHARD_LOGS, above=True)
 
         self.status_circle = ColouredCircle(
             master=self,

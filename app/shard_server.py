@@ -57,12 +57,11 @@ class DedicatedServerShard():
     def is_running(self):
         return self.process and self.process.proc.poll() is None or False
 
-    def get_arguments(self, launch_data):
+    def get_arguments(self, ugc_directory):
         game_directory    = Path(self.app.game_entry.get()   )
         cluster_directory = Path(self.app.cluster_entry.get())
 
         token = self.app.token_entry.get()
-        cluster = get_cluster_name(cluster_directory)
 
         cwd = (game_directory / "bin64").resolve()
         exe = (cwd / "dontstarve_dedicated_server_nullrenderer_x64").resolve()
@@ -71,41 +70,65 @@ class DedicatedServerShard():
             # Dev build executable.
             exe = (cwd / "dontstarve_dedicated_server_r_x64").resolve()
 
+        paths = get_cluster_launch_paths(cluster_directory)
+
         args = [
             str(exe),
-            "-cluster", str(cluster),
+            "-cluster", paths["cluster"],
             "-shard", str(self.shard),
             "-monitor_parent_process", str(PROCESS_ID),
-            "-token", token,
         ]
 
-        if launch_data.ownerdir:
-            args.append("-ownerdir")
-            args.append(launch_data.ownerdir)
+        if token:
+            args.append("-token")
+            args.append(token)
         else:
-            logger.warning("Starting shard: missing user dir.")
+            logger.warning(f"({self.shard}) No token provided, the server will not be reachable online.")
 
-        if launch_data.persistent_storage_root:
+        if paths["persistent_storage_root"]:
             args.append("-persistent_storage_root")
-            args.append(launch_data.persistent_storage_root)
+            args.append(paths["persistent_storage_root"])
         else:
-            logger.warning("Starting shard: missing storage root.")
+            logger.warning(f"({self.shard}) Could not resolve the persistent storage root from '{cluster_directory}', the game will use its default one.")
 
-        if launch_data.ugc_directory:
+        if paths["conf_dir"]:
+            args.append("-conf_dir")
+            args.append(paths["conf_dir"])
+        else:
+            logger.warning(f"({self.shard}) Could not resolve the config directory from '{cluster_directory}', the game will use its default one.")
+
+        if paths["ownerdir"]:
+            args.append("-ownerdir")
+            args.append(paths["ownerdir"])
+
+        if ugc_directory:
             args.append("-ugc_directory")
-            args.append(launch_data.ugc_directory)
+            args.append(ugc_directory)
         else:
-            logger.warning("Starting shard: missing mods directory.")
+            logger.warning(f"({self.shard}) No workshop directory found, subscribed mods will not be loaded.")
 
-        extra_args = self.app.settings.get(Settings.LAUNCH_OPTIONS).split()
-
-        args = args + extra_args
+        args = args + split_launch_options(self.app.settings.get(Settings.LAUNCH_OPTIONS))
 
         return args, str(cwd)
 
+    def resolve_ugc_directory(self):
+        """ Workshop folder, from the game install when possible, otherwise from a previous launch's log. """
+
+        ugc_directory = get_ugc_directory(self.app.game_entry.get())
+
+        if ugc_directory:
+            return ugc_directory
+
+        launch_data = self.app.launch_data_save_loader.load()
+
+        if launch_data is None and self.shard_frame.is_master:
+            launch_data = retrieve_launch_data(self.app.cluster_entry.get(), self.app.launch_data_save_loader)
+
+        return launch_data and launch_data["ugc_directory"] or None
+
     def start(self):
         if self.is_running():
-            logger.warning(f"Shard {self.shard} is already running...")
+            logger.warning(f"({self.shard}) Start request ignored, the shard is already running.")
             return
 
         game_directory_valid    = self.app.game_entry.validate_text()
@@ -115,36 +138,36 @@ class DedicatedServerShard():
             if self.shard_frame.is_master:
                 invalid_name = not game_directory_valid and STRINGS.ENTRY.GAME_TITLE or STRINGS.ENTRY.CLUSTER_TITLE
                 self.app.error_popup.create(STRINGS.ERROR.DIRECTORY_INVALID.format(directory_name=invalid_name))
+
+            logger.warning(f"({self.shard}) Start cancelled, the {not game_directory_valid and 'game' or 'cluster'} directory is invalid.")
+
             return
 
-        launch_data = self.app.launch_data_save_loader.load()
+        ugc_directory = self.resolve_ugc_directory()
 
-        if launch_data is None:
+        if ugc_directory is None:
             if self.shard_frame.is_master:
-                launch_data = retrieve_launch_data(self.app.cluster_entry.get(), self.app.launch_data_save_loader)
+                self.app.launch_data_popup.create(STRINGS.ERROR.LAUNCH_DATA_INVALID)
 
-                if launch_data is None:
-                    self.app.launch_data_popup.create(STRINGS.ERROR.LAUNCH_DATA_INVALID)
+            logger.warning(f"({self.shard}) Start cancelled, the workshop directory could not be determined.")
 
-                    return
-            else:
-                return
+            return
 
-        logger.info(f"Starting {self.shard} shard...")
+        logger.info(f"({self.shard}) Starting the shard...")
 
         self.starting_step = -1
         self.shard_frame.set_starting()
 
-        args, cwd = self.get_arguments(launch_data)
+        args, cwd = self.get_arguments(ugc_directory)
 
-        #logger.debug("Starting server with these arguments: %s", " ".join(args))
+        logger.info(f"({self.shard}) Launching from '{cwd}' with: {' '.join(redact_token(args))}")
 
         # This is HORRIBLE, but it works (Pyinstaller --noconcole + subprocess issue)
         try:
             with StdoutMock() as sys.stdout:
                 self.process = popen_spawn.PopenSpawn(args, cwd=cwd, encoding="utf-8", codec_errors="ignore")
         except OSError as e:
-            logger.error(f"Failed to start {self.shard} shard: {e}")
+            logger.error(f"({self.shard}) Failed to start the server process: {e}")
 
             self.shard_frame.set_offline()
             self.app.error_popup.create(STRINGS.ERROR.START_FAILED.format(shard=self.shard))
@@ -164,12 +187,12 @@ class DedicatedServerShard():
             self.process.sendline(command)
 
         except OSError as e:
-            logger.error(f"OSError during DedicatedServerShard [{self.shard}] execute_command function! Command: '{command}'. Actual error: '{e}'")
+            logger.error(f"({self.shard}) Failed to send the console command '{command}': {e}")
 
             self.app.error_popup.create(STRINGS.ERROR.COMMAND_FAILED.format(shard=self.shard))
 
     def on_stopped(self):
-        logger.info(f"{self.shard} shard is down...")
+        logger.info(f"({self.shard}) The shard is now offline.")
 
         if self.task:
             self.task.kill()
@@ -184,23 +207,25 @@ class DedicatedServerShard():
             return
 
         if self.shard_frame.is_starting() or self.shard_frame.is_restarting():
+            logger.info(f"({self.shard}) Terminating the shard while it was still starting up.")
+
             try:
                 if psutil.pid_exists(self.process.pid):
                     psutil.Process(self.process.pid).terminate()
 
             except psutil.NoSuchProcess:
-                logger.warning(f"NoSuchProcess exception while stopping {self.shard} shard.")
+                logger.debug(f"({self.shard}) The server process was already gone when terminating it.")
 
             self.on_stopped()
             self.app.stop_shards()
 
         elif self.shard_frame.is_online():
+            logger.info(f"({self.shard}) Stopping the shard, waiting for the world to be saved...")
+
             self.shard_frame.set_stopping()
 
             self.execute_command(ANNOUNCE_STR.format(msg=STRINGS.COMMAND_ANNOUNCEMENT.SAVE_QUIT), log=False)
             self.execute_command(f"c_shutdown()")
-
-            logger.info(f"Stopping {self.shard} shard...")
 
     def handle_output(self):
         """
@@ -253,35 +278,37 @@ class DedicatedServerShard():
                 self.starting_step = index
                 self.shard_frame.set_starting_step(step)
 
+                logger.debug(f"({self.shard}) Boot step reached: {step}.")
+
     def handle_output_keywords(self, text):
         if "[Shard] Stopping" in text:
-            logger.info(f"{self.shard_frame.code} was shut down... Stopping other shards.")
+            if not self.shard_frame.is_stopping():
+                logger.info(f"({self.shard}) The shard is shutting down, stopping the other shards.")
 
             self.shard_frame.set_stopping()
             self.app.stop_shards()
 
         elif "E_INVALID_TOKEN" in text or "E_EXPIRED_TOKEN" in text:
-            logger.error("Invalid Token: E_INVALID_TOKEN or E_EXPIRED_TOKEN")
+            logger.error(f"({self.shard}) The server rejected the token: it is invalid or has expired.")
 
-            self.app.token_entry.toggle_warning(False)
+            self.app.token_entry.toggle_warning(False, INVALID.TOKEN_REJECTED)
             self.app.stop_shards()
 
             self.app.error_popup.create(STRINGS.ERROR.TOKEN_INVALID)
 
         elif "Received world rollback request" in text:
-            logger.info(f"{self.shard} received a rollback request...")
+            logger.info(f"({self.shard}) A world rollback was requested, restarting every shard.")
 
             self.app.shard_group.set_all_shards_restarting()
 
         elif "uploads added to server." in text:
-            logger.info(f"{self.shard} is now online!")
+            if not self.shard_frame.is_online():
+                logger.info(f"({self.shard}) The shard is now online!")
 
             self.shard_frame.set_online()
 
-            self.app.token_entry.toggle_warning(True)
-
         elif "SOCKET_PORT_ALREADY_IN_USE" in text:
-            logger.error("Invalid cluster path or ports in use: SOCKET_PORT_ALREADY_IN_USE.")
+            logger.error(f"({self.shard}) A server port is already in use, or the cluster path is wrong.")
 
             self.app.stop_shards()
 
@@ -298,7 +325,7 @@ class DedicatedServerShard():
             self.app.error_popup.create(STRINGS.ERROR.PORTS.format(ports=", ".join(ports)))
 
         elif "[Error] Server failed to start!" in text:
-            logger.error(f"{self.shard_frame.code} failed to start!")
+            logger.error(f"({self.shard}) The server failed to start, see the shard logs for details.")
 
             self.app.stop_shards()
 
@@ -308,6 +335,6 @@ class DedicatedServerShard():
             self.execute_command(load_lua_file("onserverpaused"), log=False)
 
         elif "LUA ERROR stack traceback" in text:
-            logger.warning(f"{self.shard_frame.code} shard has crashed!")
+            logger.warning(f"({self.shard}) The shard hit a Lua error, see the shard logs for the traceback.")
 
             self.app.error_popup.create(STRINGS.ERROR.SERVER_CRASH)

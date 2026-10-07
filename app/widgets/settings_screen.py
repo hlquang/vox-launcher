@@ -13,7 +13,8 @@ from fonts import FONT
 from helpers import open_github_issue, resource_path, open_path
 from settings_manager import Settings
 
-INVALID_TEXTBOX_ARGS = [ "cluster", "shard", "monitor_parent_process", "token", "ownerdir", "persistent_storage_root", "ugc_directory" ]
+# Options Vox passes itself. The game matches flags by substring, so anything containing one collides.
+INVALID_TEXTBOX_ARGS = [ "-cluster", "-shard", "-monitor_parent_process", "-token", "-ownerdir", "-persistent_storage_root", "-ugc_directory", "-conf_dir", "-config_dir" ]
 
 LAUNCH_OPTIONS_GUIDE_URL = "https://support.klei.com/hc/en-us/articles/360029556192-Dedicated-Server-Command-Line-Options-Guide"
 
@@ -454,8 +455,8 @@ class SettingsScreen():
 
         for match in matches:
             start, end = match.span()
-            matched_word = match.group(1)[1:] # No prefix symbol.
-            tag = matched_word in INVALID_TEXTBOX_ARGS and "badoption" or "goodoption"
+            matched_word = match.group(1)
+            tag = any(arg in matched_word for arg in INVALID_TEXTBOX_ARGS) and "badoption" or "goodoption"
 
             self.arguments_entry.tag_add(tag, f"1.0+{start}c", f"1.0+{end}c")
 

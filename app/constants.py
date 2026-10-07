@@ -34,10 +34,11 @@ class FONT_SIZE:
     SETTING_DESC = 13
     SETTING_LONG_BUTTON = 13
     SEARCH_RESULTS = 12
+    TOOLTIP_SMALL = 11
 
 # ------------------------------------------------------------------------------------ #
 
-APP_VERSION = "v1.4.0"
+APP_VERSION = "v1.4.1"
 
 PATCH_NOTES_URL = "https://github.com/diogo-webber/vox-launcher/releases/latest/"
 
